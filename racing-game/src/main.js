@@ -1,84 +1,72 @@
 import Phaser from 'phaser';
 
 /**
- * A simple AI Agent that follows a set of waypoints.
- * This version is refactored to output Player-style controls
- * { thrust, angularVelocity }
- * to match the ML-refactored GameScene.update()
+ * A new AI Agent that connects to the Python WebSocket server
+ * to get predictions from the trained PyTorch model.
  */
 class AIAgent {
     constructor(waypoints, acceleration, angularVelocity) {
-        this.waypoints = waypoints;
-        this.currentWaypointIndex = 0;
-        
         // Store the car's physics capabilities
         this.ACCELERATION_FORCE = acceleration;
         this.ANGULAR_VELOCITY = angularVelocity;
-    }
 
-/**
-     * The main decision-making function.
-     * @param {object} state - The current state of the AI car.
-     * @param {number} state.x - The car's x position.
-     * @param {number} state.y - The car's y position.
-     * @param {number} state.rotation - The car's current angle.
-     * @param {number[]} state.rayDistances - The car's 5 sensor readings.
-     * @returns {object} An action object: { thrust, angularVelocity }
-     */
-    update(state) {
-        // --- Waypoint-following logic ---
-        const waypoint = this.waypoints[this.currentWaypointIndex];
-        const dx = waypoint.x - state.x;
-        const dy = waypoint.y - state.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        // This will store the latest action from the Python server
+        this.latestAction = {
+            thrust: 0,
+            angularVelocity: 0
+        };
 
-        if (distance < 75) { 
-            this.currentWaypointIndex = (this.currentWaypointIndex + 1) % this.waypoints.length;
-        }
+        // --- WebSocket Connection ---
+        this.socket = new WebSocket('ws://localhost:8765');
 
-        // --- Action Logic ---
+        this.socket.onopen = () => {
+            console.log('🤖 AI Agent: Connected to Python server.');
+        };
 
-        // 1. Find the target angle
-        const targetAngle = Math.atan2(dy, dx);
-        
-        // 2. Find the shortest angle difference
-        // angleDiff > 0 means we need to turn Clockwise (Right)
-        // angleDiff < 0 means we need to turn Counter-Clockwise (Left)
-        const angleDiff = Phaser.Math.Angle.ShortestBetween(state.rotation, targetAngle);
-        const absAngleDiff = Math.abs(angleDiff);
+        this.socket.onclose = () => {
+            console.error('🤖 AI Agent: Disconnected from Python server.');
+            // Stop the car if connection is lost
+            this.latestAction = { thrust: 0, angularVelocity: 0 };
+        };
 
-        // 3. *** THE CORRECTED STEERING LOGIC ***
-        let angularVelocity = 0;
-        
-        if (angleDiff > 0.03) { 
-            // Need to turn CW (Right)
-            angularVelocity = this.ANGULAR_VELOCITY;  // POSITIVE velocity
-        } else if (angleDiff < -0.03) {
-            // Need to turn CCW (Left)
-            angularVelocity = -this.ANGULAR_VELOCITY; // NEGATIVE velocity
-        }
-        
-        // 4. *** SIMPLIFIED THRUST LOGIC ***
-        let thrust = this.ACCELERATION_FORCE; // Default to accelerating
+        this.socket.onerror = (error) => {
+            console.error('🤖 AI Agent: WebSocket Error: ', error);
+        };
 
-        // If we have to make a sharp turn (more than ~57 degrees),
-        // cut the engine and just focus on steering.
-        // This prevents spinning out.
-        if (absAngleDiff > 1.0) { 
-            thrust = 0; // Coast
-        }
+        /**
+         * This is the most important part.
+         * It listens for messages from the Python server.
+         */
+        this.socket.onmessage = (event) => {
+            // 1. Get the model's output (e.g., {'steering': -0.5, 'throttle': 1.0})
+            const modelOutput = JSON.parse(event.data);
 
-        // At the start, absAngleDiff is 1.57, so thrust will be 0,
-        // but angularVelocity will be POSITIVE, making it turn correctly to the right.
-        // As it turns, absAngleDiff will drop below 1.0, and thrust will kick in.
-
-        return {
-            thrust: thrust,
-            angularVelocity: angularVelocity
+            // 2. ***Translate model output into game physics***
+            //    - 'throttle' (0 to 1) becomes 'thrust'
+            //    - 'steering' (-1 to 1) becomes 'angularVelocity'
+            this.latestAction = {
+                thrust: modelOutput.throttle * this.ACCELERATION_FORCE,
+                angularVelocity: modelOutput.steering * this.ANGULAR_VELOCITY
+            };
         };
     }
-}
 
+    /**
+     * The main decision-making function, called every frame by the game.
+     * @param {object} state - The current state of the AI car.
+     */
+    update(state) {
+        // 1. Send the current game state to the Python server
+        //    We only send if the socket is open and ready.
+        if (this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(JSON.stringify(state));
+        }
+
+        // 2. Return the *most recent action* we received from the server
+        //    The onmessage listener updates this.latestAction in the background.
+        return this.latestAction;
+    }
+}
 
 class GameScene extends Phaser.Scene {
     constructor() {
@@ -394,15 +382,13 @@ class GameScene extends Phaser.Scene {
         );
        
        
-        // --- AI Movement (REFACTORED for ML) ---
         // 1. Get the current state for the AI
         const aiState = {
             x: this.aiCar.x,
             y: this.aiCar.y,
-            rotation: this.aiCar.rotation,
-            // Pass in other useful state info
-            speed: Math.sqrt(this.aiCar.body.velocity.x**2 + this.aiCar.body.velocity.y**2),
-            angularVelocity: this.aiCar.body.angularVelocity,
+            vx: this.aiCar.body.velocity.x, // <-- Must have vx
+            vy: this.aiCar.body.velocity.y, // <-- Must have vy
+            angle: this.aiCar.rotation,      // <-- Must be 'angle', not 'rotation'
             rayDistances: this.aiRayDistances
         };
 

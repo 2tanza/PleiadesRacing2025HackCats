@@ -26,7 +26,7 @@ class RacingPolicyNetwork(nn.Module):
     Input: Game state (position, velocity, angle, ray distances)
     Output: Steering (-1 to 1) and Throttle (0 to 1)
     """
-    def __init__(self, input_size=9, hidden_sizes=[128, 64, 32]):
+    def __init__(self, input_size=11, hidden_sizes=[128, 64, 32]):
         super(RacingPolicyNetwork, self).__init__()
         
         layers = []
@@ -147,17 +147,16 @@ class TelemetryDataset(Dataset):
         
         # Use ray distances as features
         ray_distances = frame.get('playerRayDistances', [1, 1, 1, 1, 1])
-        ray_features = ray_distances[:3]
-        
+        ray_features = ray_distances[:5] # <-- CHANGE TO 5
+
         # Pad with zeros if needed
-        while len(ray_features) < 3:
+        while len(ray_features) < 5: # <-- CHANGE TO 5
             ray_features.append(1.0)
-        
+
         features = [
             norm_x, norm_y, norm_vx, norm_vy, 
             norm_angle, speed
-        ] + ray_features[:3]
-        
+        ] + ray_features[:5] # <-- CHANGE TO 5        
         return features
     
     def _calculate_steering(self, frame):
@@ -182,7 +181,7 @@ class RacingAITrainer:
         self.canvas_height = canvas_height
         
         # Input size: 9 features (6 base + 3 ray distances)
-        input_size = 9
+        input_size = 11
         
         self.model = RacingPolicyNetwork(input_size=input_size).to(device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
@@ -368,7 +367,7 @@ class RacingAIInference:
         self.max_speed = 300
         
         # Initialize model
-        self.model = RacingPolicyNetwork(input_size=9).to(device)
+        self.model = RacingPolicyNetwork(input_size=11).to(device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.eval()
         
@@ -405,12 +404,12 @@ class RacingAIInference:
         speed = np.sqrt(game_state['vx']**2 + game_state['vy']**2) / self.max_speed
         
         ray_distances = game_state.get('rayDistances', [1, 1, 1, 1, 1])
-        ray_features = ray_distances[:3]
-        
-        while len(ray_features) < 3:
+        ray_features = ray_distances[:5] # <-- CHANGE TO 5
+
+        while len(ray_features) < 5: # <-- CHANGE TO 5
             ray_features.append(1.0)
-        
-        return [norm_x, norm_y, norm_vx, norm_vy, norm_angle, speed] + ray_features[:3]
+
+        return [norm_x, norm_y, norm_vx, norm_vy, norm_angle, speed] + ray_features[:5] # <-- CHANGE TO 5
 
 
 # ============================================================================

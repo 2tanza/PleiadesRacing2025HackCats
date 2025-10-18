@@ -18,7 +18,7 @@ inference_model = RacingAIInference(model_path=MODEL_PATH, device='cpu')
 print(f"✅ Model '{MODEL_PATH}' loaded.")
 
 
-async def handler(websocket, path):
+async def handler(websocket):
     """
     Handles incoming WebSocket connections and messages.
     """
