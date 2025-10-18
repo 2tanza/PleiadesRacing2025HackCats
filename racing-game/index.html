@@ -14,13 +14,150 @@
             height: 100vh;
             background: #222;
             font-family: Arial, sans-serif;
+            overflow: hidden; /* Hide scrollbars */
         }
+        
+        /* The main container for the game and UI */
+        #game-container {
+            display: flex;
+            flex-direction: row;
+        }
+
+        /* The game canvas itself */
         canvas {
             display: block;
+        }
+
+        /* The sidebar for track pieces */
+        #toolbox {
+            width: 150px;
+            height: 800px; /* Match game height */
+            background: #333;
+            color: #fff;
+            padding: 10px;
+            box-sizing: border-box; /* Include padding in width */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #toolbox h3 {
+            margin-top: 0;
+            text-align: center;
+            border-bottom: 1px solid #555;
+            padding-bottom: 10px;
+            width: 100%;
+        }
+
+        /* Styles for the draggable track pieces */
+        .track-piece {
+            width: 100px;
+            height: 100px;
+            background: #555;
+            border: 2px dashed #888;
+            margin: 10px 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: grab;
+            user-select: none; /* Prevent text selection */
+        }
+
+        .track-piece:active {
+            cursor: grabbing;
+        }
+
+        #clear-button {
+            background: #c00;
+            color: white;
+            border: none;
+            padding: 10px;
+            width: 100%;
+            cursor: pointer;
+            margin-top: auto; /* Push to bottom */
+        }
+        #clear-button:hover {
+            background: #e00;
         }
     </style>
 </head>
 <body>
+
+    <div id="game-container">
+        
+        <div id="toolbox">
+            <h3>Track Editor</h3>
+
+            <div class="track-piece" draggable="true" data-type="straight-h">
+                Straight (H)
+            </div>
+            
+            <div class="track-piece" draggable="true" data-type="straight-v">
+                Straight (V)
+            </div>
+            
+            <div class="track-piece" draggable="true" data-type="turn-l">
+                Turn (L)
+            </div>
+            
+            <button id="clear-button">Clear Track</button>
+        </div>
+
+        </div>
+
     <script type="module" src="/src/main.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const pieces = document.querySelectorAll('.track-piece');
+            
+            pieces.forEach(piece => {
+                piece.addEventListener('dragstart', (e) => {
+                    // Store the 'data-type' (e.g., 'straight-h')
+                    e.dataTransfer.setData('text/plain', e.target.dataset.type);
+                    e.dataTransfer.effectAllowed = 'copy';
+                });
+            });
+
+            const gameCanvas = document.querySelector('canvas');
+
+            if (gameCanvas) {
+                // 1. Allow dropping on the canvas
+                gameCanvas.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'copy';
+                });
+
+                // 2. Handle the drop event
+                gameCanvas.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    
+                    const pieceType = e.dataTransfer.getData('text/plain');
+                    
+                    // Get drop coordinates relative to the canvas
+                    const bounds = gameCanvas.getBoundingClientRect();
+                    const x = e.clientX - bounds.left;
+                    const y = e.clientY - bounds.top;
+
+                    // Send an event to the running Phaser game
+                    // We assume the global 'game' instance is available
+                    if (window.game) {
+                        window.game.events.emit('addTrackPiece', { pieceType, x, y });
+                    }
+                });
+            }
+
+            // 3. Handle the Clear Track button
+            const clearButton = document.getElementById('clear-button');
+            clearButton.addEventListener('click', () => {
+                if (window.game) {
+                    // Emit a custom event to tell the scene to clear the track
+                    window.game.events.emit('clearTrack');
+                }
+            });
+        });
+    </script>
 </body>
 </html>
