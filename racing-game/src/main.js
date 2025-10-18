@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
+import { TrackEditor } from './map.js'; // <-- Import is unchanged
 
 /**
- * A new AI Agent that connects to the Python WebSocket server
- * to get predictions from the trained PyTorch model.
+ * AIAgent Class
+ * (This class is unchanged)
  */
 class AIAgent {
+    // ... (AIAgent class remains completely unchanged) ...
     constructor(waypoints, acceleration, angularVelocity) {
         // Store the car's physics capabilities
         this.ACCELERATION_FORCE = acceleration;
@@ -68,7 +70,9 @@ class AIAgent {
     }
 }
 
+
 class GameScene extends Phaser.Scene {
+    // ... (Constructor is unchanged) ...
     constructor() {
         super({ key: 'GameScene' });
 
@@ -76,54 +80,19 @@ class GameScene extends Phaser.Scene {
         this.MAX_SPEED = 600;
         this.ACCELERATION_FORCE = 0.01;
         this.ANGULAR_VELOCITY = 0.05;
-        this.RAY_LENGTH = 150;
+        this.RAY_LENGTH = 200;
     }
 
     create() {
         this.cameras.main.setBackgroundColor(0x222222);
 
-       // --- Draw Visual Road Surface ---
-        const graphics = this.add.graphics();
-        
-        // 1. Draw the outer road boundary
-        graphics.fillStyle(0x333333, 1);
-        graphics.fillRect(100, 100, 600, 600); // x, y, width, height
+        // --- Create the Track Editor ---
+        this.trackEditor = new TrackEditor(this);
+        this.trackEditor.createOvalTrack();
 
-        // 2. "Cut out" the middle with the background color
-        graphics.fillStyle(0x222222, 1); // Background color
-        graphics.fillRect(200, 200, 400, 400);
-
-        // --- Track & Wall Data (Oval) ---
-        const trackData = [
-            // Outer Walls
-            { x: 400, y: 95,  w: 610, h: 10 },  // Top
-            { x: 400, y: 705, w: 610, h: 10 },  // Bottom
-            { x: 95,  y: 400, w: 10,  h: 610 },  // Left
-            { x: 705, y: 400, w: 10,  h: 610 },  // Right
-            
-            // Inner Walls
-            { x: 400, y: 205, w: 410, h: 10 },  // Inner Top
-            { x: 400, y: 595, w: 410, h: 10 },  // Inner Bottom
-            { x: 195, y: 400, w: 10,  h: 410 },  // Inner Left
-            { x: 605, y: 400, w: 10,  h: 410 }   // Inner Right
-        ];
-
-        this.geomWalls = [];
-        const wallOptions = { isStatic: true, friction: 0.0, restitution: 0.1, label: 'wall' };
-        
-        // --- Build Physics and Raycast Walls from Data ---
-        trackData.forEach(wall => {
-            // 1. Add Matter.js physics body (invisible)
-            this.matter.add.rectangle(wall.x, wall.y, wall.w, wall.h, wallOptions);
-
-            // 2. Add Phaser.Geom.Rectangle for raycasting (top-left based)
-            this.geomWalls.push(
-                new Phaser.Geom.Rectangle(wall.x - wall.w / 2, wall.y - wall.h / 2, wall.w, wall.h)
-            );
-        });
-
-// --- Player Car (Matter Body) ---
-        this.playerCar = this.add.rectangle(650, 250, 30, 20, 0xff0000); // Start pos
+        // --- Player Car (Matter Body) ---
+        // ... (Player Car creation is unchanged) ...
+        this.playerCar = this.add.rectangle(650, 250, 30, 20, 0xff0000); 
         this.matter.add.gameObject(this.playerCar, {
             mass: 10,
             frictionAir: 0.1,
@@ -137,15 +106,15 @@ class GameScene extends Phaser.Scene {
         this.crashCount = 0;
 
         // --- Ray sensors (Player) ---
+        // ... (Ray sensor creation is unchanged) ...
         this.rayDistances = [0, 0, 0, 0, 0];
         this.rayGraphics = this.add.graphics();
-        
-        // --- Ray sensors (AI) ---
         this.aiRayDistances = [0, 0, 0, 0, 0];
         this.aiRayGraphics = this.add.graphics();
         
-// --- AI Car & Waypoints ---
-        this.aiCar = this.add.rectangle(650, 300, 30, 20, 0x0000ff); // Start pos
+        // --- AI Car & Waypoints ---
+        // ... (AI Car & Waypoint creation is unchanged) ...
+        this.aiCar = this.add.rectangle(650, 300, 30, 20, 0x0000ff);
         this.matter.add.gameObject(this.aiCar, {
             mass: 10,
             frictionAir: 0.1,
@@ -154,22 +123,20 @@ class GameScene extends Phaser.Scene {
             label: 'aiCar'
         });
 
-        // New waypoints for the Oval track
         this.waypoints = [
-            { x: 650, y: 650 }, // Go to bottom-right
-            { x: 150, y: 650 }, // Go to bottom-left
-            { x: 150, y: 150 }, // Go to top-left
-            { x: 650, y: 150 }  // Go to top-right (completes loop)
+            { x: 650, y: 650 }, 
+            { x: 150, y: 650 },
+            { x: 150, y: 150 },
+            { x: 650, y: 150 } 
         ];
-
-        // --- Create the AI Agent "Brain" ---
         this.aiAgent = new AIAgent(
             this.waypoints, 
-            this.ACCELERATION_FORCE, // Give the AI the player's acceleration
-            this.ANGULAR_VELOCITY    // Give the AI the player's turn speed
+            this.ACCELERATION_FORCE,
+            this.ANGULAR_VELOCITY
         );
         
         // --- Collision Listener ---
+        // ... (Collision listener is unchanged) ...
         this.matter.world.on('collisionstart', (event, bodyA, bodyB) => {
             const isPlayerA = bodyA.gameObject === this.playerCar;
             const isPlayerB = bodyB.gameObject === this.playerCar;
@@ -180,6 +147,7 @@ class GameScene extends Phaser.Scene {
         });
 
         // --- Input ---
+        // ... (Input keys are unchanged) ...
         this.keys = this.input.keyboard.addKeys({
             up: Phaser.Input.Keyboard.KeyCodes.UP,
             down: Phaser.Input.Keyboard.KeyCodes.DOWN,
@@ -191,6 +159,7 @@ class GameScene extends Phaser.Scene {
         });
 
         // --- Telemetry & UI ---
+        // ... (Telemetry UI is unchanged) ...
         this.telemetryData = [];
         this.isRecording = false;
         this.frameCount = 0;
@@ -199,11 +168,107 @@ class GameScene extends Phaser.Scene {
         this.speedText = this.add.text(10, 40, 'Speed: 0', { fontSize: '14px', fill: '#fff' });
         this.crashText = this.add.text(10, 70, 'Crashes: 0', { fontSize: '14px', fill: '#fff' });
         this.instructionsText = this.add.text(10, 100, 'Arrows: Drive | SPACE: Record | E: Export | R: Reset', { fontSize: '12px', fill: '#aaa' });
+    
+        // --- NEW: Grid Snapping Preview ---
+        // Create a semi-transparent rectangle to show where the piece will land
+        this.previewRect = this.add.rectangle(0, 0, this.trackEditor.PIECE_WIDTH, this.trackEditor.PIECE_WIDTH, 0xffffff, 0.3)
+            .setVisible(false)
+            .setDepth(100); // Ensure it's drawn on top of other game elements
+
+        // --- MODIFIED: Listen for UI events from index.html ---
+        this.game.events.on('addTrackPiece', this.handleDrop, this);
+        this.game.events.on('clearTrack', this.handleClear, this);
+        this.game.events.on('updatePreview', this.handlePreview, this); // <-- NEW
+        this.game.events.on('hidePreview', this.handleHidePreview, this); // <-- NEW
     }
+
+    /**
+     * NEW: Helper function to calculate grid-snapped coordinates.
+     * Takes world coordinates and returns the CENTER of the nearest grid cell.
+     * @param {number} worldX - The raw x-coordinate from the mouse
+     * @param {number} worldY - The raw y-coordinate from the mouse
+     * @returns {object} An object { x, y } with the snapped coordinates
+     */
+    getSnappedCoordinates(worldX, worldY) {
+        const PIECE_WIDTH = this.trackEditor.PIECE_WIDTH;
+        
+        // 1. Find the top-left corner of the grid cell
+        const gridX = Math.floor(worldX / PIECE_WIDTH) * PIECE_WIDTH;
+        const gridY = Math.floor(worldY / PIECE_WIDTH) * PIECE_WIDTH;
+        
+        // 2. Calculate the center of that cell
+        const snappedX = gridX + PIECE_WIDTH / 2;
+        const snappedY = gridY + PIECE_WIDTH / 2;
+        
+        return { x: snappedX, y: snappedY };
+    }
+
+    /**
+     * NEW: Handles the 'updatePreview' event from the UI (on dragover).
+     * @param {object} data - Contains { x, y } screen coordinates
+     */
+    handlePreview(data) {
+        // Convert screen coordinates to world coordinates
+        const worldPoint = this.cameras.main.getWorldPoint(data.x, data.y);
+        
+        // Get the snapped coordinates
+        const snapped = this.getSnappedCoordinates(worldPoint.x, worldPoint.y);
+        
+        // Move the preview rectangle to the snapped position and make it visible
+        this.previewRect.setPosition(snapped.x, snapped.y).setVisible(true);
+    }
+
+    /**
+     * NEW: Handles the 'hidePreview' event from the UI (on dragleave).
+     */
+    handleHidePreview() {
+        this.previewRect.setVisible(false);
+    }
+
+    /**
+     * MODIFIED: Handles the 'addTrackPiece' event from the UI (on drop).
+     * @param {object} data - Contains { pieceType, x, y } screen coordinates
+     */
+    handleDrop(data) {
+        // Convert screen coordinates to world coordinates
+        const worldPoint = this.cameras.main.getWorldPoint(data.x, data.y);
+        
+        // --- MODIFIED: Use the snapping function ---
+        const snapped = this.getSnappedCoordinates(worldPoint.x, worldPoint.y);
+        
+        // Tell the track editor to add the new piece at the SNAPPED location
+        this.trackEditor.addTrackPiece(data.pieceType, snapped.x, snapped.y);
+
+        // Hide the preview rect after dropping
+        this.handleHidePreview();
+    }
+
+    /**
+     * MODIFIED: Handles the 'clearTrack' event from the UI.
+     */
+    handleClear() {
+        this.trackEditor.clearTrack();
+        
+        // Reset cars to a default position
+        this.playerCar.setPosition(650, 250);
+        this.playerCar.setVelocity(0, 0);
+        this.playerCar.setRotation(0);
+        
+        this.aiCar.setPosition(650, 300);
+        this.aiCar.setVelocity(0, 0);
+        this.aiCar.setRotation(0);
+
+        // Hide the preview if it was visible
+        this.handleHidePreview();
+
+        console.log('Track cleared!');
+    }
+
 
     // --- (HELPER FUNCTIONS: No changes to these) ---
     
     getCarPolygon(car) {
+        // ... (unchanged) ...
         if (!car || !car.body || !car.body.vertices) {
             return new Phaser.Geom.Polygon(); 
         }
@@ -211,6 +276,7 @@ class GameScene extends Phaser.Scene {
     }
 
     castRays(car, graphics, distances, walls, otherPolygons, rayColor) {
+        // ... (unchanged) ...
         const rayAngles = [
             car.rotation,                           // Front
             car.rotation - Math.PI / 4,             // Front-left
@@ -276,6 +342,7 @@ class GameScene extends Phaser.Scene {
     }
 
     onPlayerWallHit() {
+        // ... (unchanged) ...
         if (!this.playerCar.body) return;
         this.crashCount++;
         this.crashText.setText('Crashes: '
@@ -289,6 +356,7 @@ class GameScene extends Phaser.Scene {
     }
 
     createTelemetryFrame(crashed = false) {
+        // ... (unchanged) ...
         const playerVel = this.playerCar.body.velocity;
         const aiVel = this.aiCar.body.velocity;
         
@@ -323,6 +391,7 @@ class GameScene extends Phaser.Scene {
         this.frameCount++;
        
         // --- Player Input (Matter.js) ---
+        // ... (Player input logic is unchanged) ...
         let thrust = 0;
         let angularVelocity = 0;
        
@@ -345,7 +414,7 @@ class GameScene extends Phaser.Scene {
             this.playerCar.applyForce({ x: forceX, y: forceY });
         }
        
-        // Speed Limiter and Telemetry Update
+        // ... (Speed limiter and telemetry update is unchanged) ...
         const velocity = this.playerCar.body.velocity;
         const currentSpeed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
         if (currentSpeed > this.MAX_SPEED) {
@@ -363,11 +432,14 @@ class GameScene extends Phaser.Scene {
         const playerPolygon = this.getCarPolygon(this.playerCar);
         const aiPolygon = this.getCarPolygon(this.aiCar);
         
+        // Get the current walls from the track editor
+        const currentGeomWalls = this.trackEditor.getGeomWalls();
+        
         this.castRays(
             this.playerCar, 
             this.rayGraphics, 
             this.rayDistances, 
-            this.geomWalls, 
+            currentGeomWalls, // <-- This remains correct
             [aiPolygon],
             0x00ff00 // Green rays
         );
@@ -376,27 +448,23 @@ class GameScene extends Phaser.Scene {
             this.aiCar, 
             this.aiRayGraphics, 
             this.aiRayDistances, 
-            this.geomWalls, 
+            currentGeomWalls, // <-- This remains correct
             [playerPolygon],
             0x00ffff // Cyan rays
         );
        
        
-        // 1. Get the current state for the AI
+        // --- AI Update ---
+        // ... (AI update logic is unchanged) ...
         const aiState = {
             x: this.aiCar.x,
             y: this.aiCar.y,
-            vx: this.aiCar.body.velocity.x, // <-- Must have vx
-            vy: this.aiCar.body.velocity.y, // <-- Must have vy
-            angle: this.aiCar.rotation,      // <-- Must be 'angle', not 'rotation'
+            vx: this.aiCar.body.velocity.x,
+            vy: this.aiCar.body.velocity.y,
+            angle: this.aiCar.rotation,
             rayDistances: this.aiRayDistances
         };
-
-        // 2. Ask the "brain" for an action
-        // The ML-based agent will return { thrust, angularVelocity }
         const aiAction = this.aiAgent.update(aiState);
-        
-        // 3. Apply the action to the "body" (Player-style)
         this.aiCar.setAngularVelocity(aiAction.angularVelocity);
         if (aiAction.thrust !== 0) {
             const angle = this.aiCar.rotation;
@@ -407,6 +475,7 @@ class GameScene extends Phaser.Scene {
 
        
         // --- Recording and Export ---
+        // ... (Recording and export logic is unchanged) ...
         if (Phaser.Input.Keyboard.JustDown(this.keys.space)) {
             this.isRecording = !this.isRecording;
             if (this.isRecording) {
@@ -419,22 +488,20 @@ class GameScene extends Phaser.Scene {
                 this.recordingText.setColor('#ffffff');
             }
         }
-       
         if (this.isRecording && this.frameCount % 3 === 0) {
             const frame = this.createTelemetryFrame(false);
             this.telemetryData.push(frame);
         }
-       
         if (Phaser.Input.Keyboard.JustDown(this.keys.e)) {
             this.exportTelemetry();
         }
-       
         if (Phaser.Input.Keyboard.JustDown(this.keys.r)) {
             this.scene.restart();
         }
     }
 
     exportTelemetry() {
+        // ... (unchanged) ...
         if (this.telemetryData.length === 0) {
             alert('No data to export! Record some gameplay first.');
             return;
@@ -453,10 +520,11 @@ class GameScene extends Phaser.Scene {
 }
 
 // --- Config (No change) ---
+// ... (Config is unchanged) ...
 const config = {
     type: Phaser.AUTO,
-    width: 800, // Changed width for the new track
-    height: 800, // Changed height for the new track
+    width: 800,
+    height: 800,
     physics: {
         default: 'matter',
         matter: {
@@ -464,7 +532,9 @@ const config = {
             debug: true
         }
     },
-    scene: GameScene
+    scene: GameScene,
+    parent: 'game-container' 
 };
 
 const game = new Phaser.Game(config);
+window.game = game;
