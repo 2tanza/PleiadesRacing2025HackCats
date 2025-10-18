@@ -17,6 +17,21 @@ class CreatorScene extends Phaser.Scene {
         
         this.trackEditor.loadTrack();
 
+        // --- ADDED ---
+        // Add red dots for the hardcoded spawn points from game.js
+        const spawnPointColor = 0xff0000;
+        const spawnPointRadius = 5;
+        const spawnPointDepth = 101; // On top of preview rect
+
+        // Player 1 spawn (from game.js)
+        this.add.circle(150, 150, spawnPointRadius, spawnPointColor)
+            .setDepth(spawnPointDepth);
+            
+        // AI Car spawn (from game.js)
+        this.add.circle(150, 200, spawnPointRadius, spawnPointColor)
+            .setDepth(spawnPointDepth);
+        // --- END ADDED ---
+
         this.previewRect = this.add.rectangle(
             0, 0, 
             this.trackEditor.PIECE_WIDTH, this.trackEditor.PIECE_WIDTH, 

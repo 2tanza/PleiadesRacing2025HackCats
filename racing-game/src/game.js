@@ -53,8 +53,16 @@ class GameScene extends Phaser.Scene {
             this.trackEditor.createOvalTrack();
         }
 
-        // Hard-coded spawn points
-        this.playerCar = this.add.rectangle(650, 250, 30, 20, 0xff0000);
+        // Initialize gamepad support
+        this.gamepad = null;
+        this.input.gamepad.once('connected', (pad) => {
+            console.log('🎮 Controller connected:', pad.id);
+            this.gamepad = pad;
+        });
+
+        // Hard-coded spawn points (moved to top-left)
+        this.playerCar = this.add.rectangle(150, 150, 30, 20, 0xff0000);
+        
         this.matter.add.gameObject(this.playerCar, {
             mass: 10, frictionAir: 0.1, friction: 0.05,
             restitution: 0.3, label: 'playerCar'
@@ -68,7 +76,8 @@ class GameScene extends Phaser.Scene {
         this.aiRayDistances = [0, 0, 0, 0, 0];
         this.aiRayGraphics = this.add.graphics();
         
-        this.aiCar = this.add.rectangle(650, 300, 30, 20, 0x0000ff);
+        this.aiCar = this.add.rectangle(150, 200, 30, 20, 0x0000ff);
+        
         this.matter.add.gameObject(this.aiCar, {
             mass: 10, frictionAir: 0.1, friction: 0.01,
             restitution: 0.3, label: 'aiCar'
@@ -175,6 +184,26 @@ class GameScene extends Phaser.Scene {
     createTelemetryFrame(crashed = false) {
         const playerVel = this.playerCar.body.velocity;
         const aiVel = this.aiCar.body.velocity;
+        
+        // Capture gamepad state if it exists, otherwise capture keys
+        let inputState = {
+            inputUp: this.keys.up.isDown, inputDown: this.keys.down.isDown,
+            inputLeft: this.keys.left.isDown, inputRight: this.keys.right.isDown,
+            gamepadStickX: 0, gamepadGas: 0, gamepadBrake: 0
+        };
+
+        // --- UPDATED ---
+        if (this.gamepad && this.gamepad.connected) {
+            inputState.inputUp = false; // Prioritize gamepad
+            inputState.inputDown = false;
+            inputState.inputLeft = false;
+            inputState.inputRight = false;
+            inputState.gamepadStickX = this.gamepad.axes[0].value; // Changed .getValue() to .value
+            inputState.gamepadGas = this.gamepad.buttons[7].value; // R2/RT - Changed .getValue() to .value
+            inputState.gamepadBrake = this.gamepad.buttons[6].value; // L2/LT - Changed .getValue() to .value
+        }
+        // --- END UPDATED ---
+
         return {
             timestamp: Date.now(),
             playerX: this.playerCar.x, playerY: this.playerCar.y,
@@ -184,8 +213,7 @@ class GameScene extends Phaser.Scene {
             aiX: this.aiCar.x, aiY: this.aiCar.y,
             aiVelX: aiVel.x, aiVelY: aiVel.y,
             aiAngle: this.aiCar.rotation,
-            inputUp: this.keys.up.isDown, inputDown: this.keys.down.isDown,
-            inputLeft: this.keys.left.isDown, inputRight: this.keys.right.isDown,
+            ...inputState, // Spread the input state here
             playerRayDistances: [...this.rayDistances],
             aiRayDistances: [...this.aiRayDistances],
             crashed: crashed
@@ -195,11 +223,39 @@ class GameScene extends Phaser.Scene {
     update() {
         this.frameCount++;
        
-        let thrust = 0; let angularVelocity = 0;
-        if (this.keys.up.isDown) thrust = this.ACCELERATION_FORCE;
-        else if (this.keys.down.isDown) thrust = -this.ACCELERATION_FORCE * 0.5;
-        if (this.keys.left.isDown) angularVelocity = -this.ANGULAR_VELOCITY;
-        if (this.keys.right.isDown) angularVelocity = this.ANGULAR_VELOCITY;
+        let thrust = 0; 
+        let angularVelocity = 0;
+
+        // --- UPDATED ---
+        // Prioritize Gamepad input if available
+        if (this.gamepad && this.gamepad.connected) {
+            // Analog Steering (Left Stick X-Axis)
+            const steer = this.gamepad.axes[0].value; // Changed .getValue() to .value
+            if (Math.abs(steer) > 0.1) { // Deadzone
+                angularVelocity = steer * this.ANGULAR_VELOCITY;
+            }
+
+            // Analog Acceleration (R2/RT button 7)
+            const gas = this.gamepad.buttons[7].value; // Changed .getValue() to .value
+            // Analog Brake/Reverse (L2/LT button 6)
+            const brake = this.gamepad.buttons[6].value; // Changed .getValue() to .value
+
+            if (gas > 0.05) { // Deadzone
+                thrust = gas * this.ACCELERATION_FORCE;
+            } else if (brake > 0.05) { // Deadzone
+                thrust = -brake * this.ACCELERATION_FORCE * 0.5; // Half power reverse
+            }
+        } 
+        // --- END UPDATED ---
+        // Fallback to Keyboard
+        else {
+            if (this.keys.up.isDown) thrust = this.ACCELERATION_FORCE;
+            else if (this.keys.down.isDown) thrust = -this.ACCELERATION_FORCE * 0.5;
+
+            if (this.keys.left.isDown) angularVelocity = -this.ANGULAR_VELOCITY;
+            else if (this.keys.right.isDown) angularVelocity = this.ANGULAR_VELOCITY;
+        }
+
         this.playerCar.setAngularVelocity(angularVelocity);
         if (thrust !== 0) {
             const angle = this.playerCar.rotation;
@@ -280,6 +336,9 @@ const config = {
     physics: {
         default: 'matter',
         matter: { gravity: { y: 0 }, debug: true }
+    },
+    input: {
+        gamepad: true
     },
     scene: GameScene, 
     parent: 'game-container'
