@@ -71,7 +71,7 @@ class TelemetryDataset(Dataset):
     Loads telemetry JSON files exported from the Phaser game.
     Converts game state into neural network input features.
     """
-    def __init__(self, json_files, canvas_width=800, canvas_height=800):
+    def __init__(self, json_files, canvas_width=1200, canvas_height=1200):
         self.data = []
         self.canvas_width = canvas_width
         self.canvas_height = canvas_height
@@ -147,16 +147,17 @@ class TelemetryDataset(Dataset):
         
         # Use ray distances as features
         ray_distances = frame.get('playerRayDistances', [1, 1, 1, 1, 1])
-        ray_features = ray_distances[:5] # <-- CHANGE TO 5
+        ray_features = ray_distances[:5] # 5 rays
 
-        # Pad with zeros if needed
-        while len(ray_features) < 5: # <-- CHANGE TO 5
+        # Pad with 1.0 if needed
+        while len(ray_features) < 5: 
             ray_features.append(1.0)
 
         features = [
             norm_x, norm_y, norm_vx, norm_vy, 
             norm_angle, speed
-        ] + ray_features[:5] # <-- CHANGE TO 5        
+        ] + ray_features[:5] # 11 features total
+        
         return features
     
     def _calculate_steering(self, frame):
@@ -174,13 +175,13 @@ class TelemetryDataset(Dataset):
 # ============================================================================
 
 class RacingAITrainer:
-    def __init__(self, canvas_width=800, canvas_height=800, 
+    def __init__(self, canvas_width=1200, canvas_height=1200, 
                  device='cuda' if torch.cuda.is_available() else 'cpu'):
         self.device = device
         self.canvas_width = canvas_width
         self.canvas_height = canvas_height
         
-        # Input size: 9 features (6 base + 3 ray distances)
+        # 11 features (6 base + 5 ray distances)
         input_size = 11
         
         self.model = RacingPolicyNetwork(input_size=input_size).to(device)
@@ -355,159 +356,16 @@ class RacingAITrainer:
 class RacingAIInference:
     """
     Lightweight inference class for running trained model.
-    Use this in your WebSocket server on Raspberry Pi.
     """
     def __init__(self, model_path, device='cpu'):
         self.device = device
         
         # Load model checkpoint
         checkpoint = torch.load(model_path, map_location=device)
-        self.canvas_width = checkpoint.get('canvas_width', 800)
-        self.canvas_height = checkpoint.get('canvas_height', 800)
+        self.canvas_width = checkpoint.get('canvas_width', 1200)
+        self.canvas_height = checkpoint.get('canvas_height', 1200)
         self.max_speed = 300
         
         # Initialize model
         self.model = RacingPolicyNetwork(input_size=11).to(device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.model.eval()
-        
-        print(f"🤖 Inference model loaded on {device}")
-    
-    def predict(self, game_state):
-        """
-        Given current game state, predict steering and throttle.
-        
-        Args:
-            game_state: dict with keys: x, y, vx, vy, angle, rayDistances
-        
-        Returns:
-            dict: {'steering': float, 'throttle': float}
-        """
-        features = self._extract_features(game_state)
-        features_tensor = torch.FloatTensor(features).unsqueeze(0).to(self.device)
-        
-        with torch.no_grad():
-            steering, throttle = self.model(features_tensor)
-        
-        return {
-            'steering': float(steering[0][0]),
-            'throttle': float(throttle[0][0])
-        }
-    
-    def _extract_features(self, game_state):
-        """Same feature extraction as training"""
-        norm_x = game_state['x'] / self.canvas_width
-        norm_y = game_state['y'] / self.canvas_height
-        norm_vx = game_state['vx'] / self.max_speed
-        norm_vy = game_state['vy'] / self.max_speed
-        norm_angle = game_state['angle'] / np.pi
-        speed = np.sqrt(game_state['vx']**2 + game_state['vy']**2) / self.max_speed
-        
-        ray_distances = game_state.get('rayDistances', [1, 1, 1, 1, 1])
-        ray_features = ray_distances[:5] # <-- CHANGE TO 5
-
-        while len(ray_features) < 5: # <-- CHANGE TO 5
-            ray_features.append(1.0)
-
-        return [norm_x, norm_y, norm_vx, norm_vy, norm_angle, speed] + ray_features[:5] # <-- CHANGE TO 5
-
-
-# ============================================================================
-# MAIN TRAINING SCRIPT
-# ============================================================================
-
-def main():
-    print("=" * 70)
-    print("🏎️  RACING AI TRAINER")
-    print("=" * 70)
-    print()
-    
-    # Configuration
-    CANVAS_WIDTH = 800
-    CANVAS_HEIGHT = 800
-    BATCH_SIZE = 64
-    EPOCHS = 50
-    TRAIN_SPLIT = 0.8
-    
-    # Load telemetry data
-    data_folder = Path('telemetry_data')
-    
-    if not data_folder.exists():
-        print(f"❌ Error: '{data_folder}' folder not found!")
-        print(f"   Creating it now...")
-        data_folder.mkdir()
-        print(f"   Add your telemetry JSON files to this folder and run again.")
-        return
-    
-    json_files = list(data_folder.glob('*.json'))
-    
-    if not json_files:
-        print(f"❌ Error: No JSON files found in '{data_folder}'")
-        print(f"   Play the game and export telemetry data first.")
-        return
-    
-    print(f"📁 Found {len(json_files)} telemetry file(s):")
-    for f in json_files:
-        size_kb = f.stat().st_size / 800
-        print(f"   • {f.name} ({size_kb:.1f} KB)")
-    print()
-    
-    # Create dataset
-    try:
-        dataset = TelemetryDataset(json_files, CANVAS_WIDTH, CANVAS_HEIGHT)
-    except ValueError as e:
-        print(f"❌ {e}")
-        return
-    
-    # Split into train/validation
-    train_size = int(TRAIN_SPLIT * len(dataset))
-    val_size = len(dataset) - train_size
-    train_dataset, val_dataset = torch.utils.data.random_split(
-        dataset, [train_size, val_size]
-    )
-    
-    print(f"📊 Dataset split:")
-    print(f"   Training: {train_size} frames ({TRAIN_SPLIT*100:.0f}%)")
-    print(f"   Validation: {val_size} frames ({(1-TRAIN_SPLIT)*100:.0f}%)")
-    print()
-    
-    # Create data loaders
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
-    
-    # Initialize trainer
-    trainer = RacingAITrainer(CANVAS_WIDTH, CANVAS_HEIGHT)
-    
-    # Train model
-    start_time = datetime.now()
-    trainer.train(train_loader, val_loader, epochs=EPOCHS)
-    training_time = (datetime.now() - start_time).total_seconds()
-    
-    # Save models
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_path = f'racing_ai_model_{timestamp}.pth'
-    trainer.save_model(model_path)
-    trainer.save_model('racing_ai_model.pth')
-    
-    # Plot results
-    trainer.plot_training_history(f'training_history_{timestamp}.png')
-    
-    # Final summary
-    print("\n" + "=" * 70)
-    print("✅ TRAINING COMPLETE!")
-    print("=" * 70)
-    print(f"\n⏱️  Training time: {training_time/60:.1f} minutes")
-    print(f"\n📦 Models saved:")
-    print(f"   • racing_ai_model.pth (for deployment)")
-    print(f"   • {model_path} (timestamped backup)")
-    print(f"\n📊 Training plot: training_history_{timestamp}.png")
-    print(f"\n🚀 Next steps:")
-    print(f"   1. Review the training plot")
-    print(f"   2. Copy racing_ai_model.pth to Raspberry Pi")
-    print(f"   3. Run MCP server on Pi")
-    print(f"   4. Connect your game!")
-    print("=" * 70)
-
-
-if __name__ == "__main__":
-    main()

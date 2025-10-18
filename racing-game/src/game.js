@@ -1,9 +1,8 @@
 import Phaser from 'phaser';
-import { TrackEditor } from './map.js'; // Import the editor
+import { TrackEditor } from './map.js'; 
 
 /**
  * AIAgent Class
- * (This class is completely unchanged)
  */
 class AIAgent {
     constructor(waypoints, acceleration, angularVelocity) {
@@ -35,7 +34,6 @@ class AIAgent {
 
 /**
  * GameScene
- * This is now ONLY for playing the game.
  */
 class GameScene extends Phaser.Scene {
     constructor() {
@@ -49,15 +47,13 @@ class GameScene extends Phaser.Scene {
     create() {
         this.cameras.main.setBackgroundColor(0x222222);
 
-        // --- Create the Track ---
-        // This will load from localStorage OR create the default oval
         this.trackEditor = new TrackEditor(this);
         const loaded = this.trackEditor.loadTrack();
         if (!loaded) {
             this.trackEditor.createOvalTrack();
         }
 
-        // --- Player Car ---
+        // Hard-coded spawn points
         this.playerCar = this.add.rectangle(650, 250, 30, 20, 0xff0000);
         this.matter.add.gameObject(this.playerCar, {
             mass: 10, frictionAir: 0.1, friction: 0.05,
@@ -67,13 +63,11 @@ class GameScene extends Phaser.Scene {
         this.playerAngle = this.playerCar.rotation;
         this.crashCount = 0;
 
-        // --- Ray sensors ---
         this.rayDistances = [0, 0, 0, 0, 0];
         this.rayGraphics = this.add.graphics();
         this.aiRayDistances = [0, 0, 0, 0, 0];
         this.aiRayGraphics = this.add.graphics();
         
-        // --- AI Car & Waypoints ---
         this.aiCar = this.add.rectangle(650, 300, 30, 20, 0x0000ff);
         this.matter.add.gameObject(this.aiCar, {
             mass: 10, frictionAir: 0.1, friction: 0.01,
@@ -87,7 +81,6 @@ class GameScene extends Phaser.Scene {
             this.waypoints, this.ACCELERATION_FORCE, this.ANGULAR_VELOCITY
         );
         
-        // --- Collision Listener ---
         this.matter.world.on('collisionstart', (event, bodyA, bodyB) => {
             const isPlayerA = bodyA.gameObject === this.playerCar;
             const isPlayerB = bodyB.gameObject === this.playerCar;
@@ -96,13 +89,11 @@ class GameScene extends Phaser.Scene {
             }
         });
 
-        // --- Input ---
         this.keys = this.input.keyboard.addKeys({
             up: 'UP', down: 'DOWN', left: 'LEFT', right: 'RIGHT',
             space: 'SPACE', e: 'E', r: 'R'
         });
 
-        // --- Telemetry & UI ---
         this.telemetryData = [];
         this.isRecording = false;
         this.frameCount = 0;
@@ -112,7 +103,6 @@ class GameScene extends Phaser.Scene {
         this.instructionsText = this.add.text(10, 100, 'Arrows: Drive | SPACE: Record | E: Export | R: Reset', { fontSize: '12px', fill: '#aaa' });
     }
 
-    // --- (HELPER FUNCTIONS: All unchanged) ---
     
     getCarPolygon(car) {
         if (!car || !car.body || !car.body.vertices) {
@@ -202,12 +192,9 @@ class GameScene extends Phaser.Scene {
         };
     }
     
-    // --- (END OF UNCHANGED HELPERS) ---
-
     update() {
         this.frameCount++;
        
-        // --- Player Input (Unchanged) ---
         let thrust = 0; let angularVelocity = 0;
         if (this.keys.up.isDown) thrust = this.ACCELERATION_FORCE;
         else if (this.keys.down.isDown) thrust = -this.ACCELERATION_FORCE * 0.5;
@@ -219,7 +206,6 @@ class GameScene extends Phaser.Scene {
             this.playerCar.applyForce({ x: Math.cos(angle) * thrust, y: Math.sin(angle) * thrust });
         }
        
-        // Speed Limiter (Unchanged)
         const velocity = this.playerCar.body.velocity;
         const currentSpeed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
         if (currentSpeed > this.MAX_SPEED) {
@@ -233,7 +219,6 @@ class GameScene extends Phaser.Scene {
         this.playerAngle = this.playerCar.rotation;
 
         
-        // --- Cast rays (Unchanged, but uses loaded walls) ---
         const playerPolygon = this.getCarPolygon(this.playerCar);
         const aiPolygon = this.getCarPolygon(this.aiCar);
         const currentGeomWalls = this.trackEditor.getGeomWalls();
@@ -247,7 +232,6 @@ class GameScene extends Phaser.Scene {
             currentGeomWalls, [playerPolygon], 0x00ffff
         );
        
-        // --- AI Update (Unchanged) ---
         const aiState = {
             x: this.aiCar.x, y: this.aiCar.y,
             vx: this.aiCar.body.velocity.x, vy: this.aiCar.body.velocity.y,
@@ -260,7 +244,6 @@ class GameScene extends Phaser.Scene {
             this.aiCar.applyForce({ x: Math.cos(angle) * aiAction.thrust, y: Math.sin(angle) * aiAction.thrust });
         }
        
-        // --- Recording and Export (Unchanged) ---
         if (Phaser.Input.Keyboard.JustDown(this.keys.space)) {
             this.isRecording = !this.isRecording;
             this.recordingText.setText(this.isRecording ? 'REC - Recording...' : 'Press SPACE to record');
@@ -289,18 +272,18 @@ class GameScene extends Phaser.Scene {
     }
 }
 
-// --- Config (Unchanged, but for GameScene) ---
+// --- Config ---
 const config = {
     type: Phaser.AUTO,
-    width: 800,
-    height: 800,
+    width: 1200,
+    height: 1200,
     physics: {
         default: 'matter',
         matter: { gravity: { y: 0 }, debug: true }
     },
-    scene: GameScene, // <-- Loads the GameScene
+    scene: GameScene, 
     parent: 'game-container'
 };
 
 const game = new Phaser.Game(config);
-window.game = game; // Expose for any potential debug
+window.game = game;

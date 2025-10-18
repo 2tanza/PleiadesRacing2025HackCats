@@ -1,27 +1,26 @@
 <!DOCTYPE html>
 <html>
-        <style>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Racing Game - Play</title>
+    <style>
         body {
-            font-family: Arial, sans-serif;
-            background: #222;
-            color: #fff;
+            margin: 0;
+            padding: 0;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
-            margin: 0;
-            text-align: center;
+            background: #222;
+            font-family: Arial, sans-serif;
         }
-        .container {
-            max-width: 600px;
+        #game-container {
+            display: flex;
+            flex-direction: row;
         }
-        h1 {
-            font-size: 3rem;
-            color: #00ffff;
-        }
-        p {
-            font-size: 1.2rem;
-            line-height: 1.6;
+        canvas {
+            display: block;
         }
         .nav-links a {
             display: inline-block;
@@ -39,39 +38,15 @@
             background: #fff;
         }
     </style>
-
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Racing Game - Play</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background: #222;
-            font-family: Arial, sans-serif;
-        }
-        /* This container is required by the game's config */
-        #game-container {
-            display: flex;
-            flex-direction: row;
-        }
-        canvas {
-            display: block;
-        }
-    </style>
 </head>
 <body>
     <div id="game-container"></div>
     
-    <script type="module" src="/src/game.js"></script>
+    <script type="module" src="src/game.js"></script>
+</body>
+
     <div class="nav-links">
         <a href="index.html">Index</a>
     </div>
 
-</body>
 </html>
