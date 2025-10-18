@@ -8,7 +8,7 @@ Compatible with your JSON format: playerX, playerY, playerVelX, playerVelY, etc.
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, random_split  # <-- ADDED random_split
 import json
 import numpy as np
 from pathlib import Path
@@ -71,7 +71,7 @@ class TelemetryDataset(Dataset):
     Loads telemetry JSON files exported from the Phaser game.
     Converts game state into neural network input features.
     """
-    def __init__(self, json_files, canvas_width=1024, canvas_height=768):
+    def __init__(self, json_files, canvas_width=1200, canvas_height=1200):
         self.data = []
         self.canvas_width = canvas_width
         self.canvas_height = canvas_height
@@ -109,6 +109,14 @@ class TelemetryDataset(Dataset):
         steering = self._calculate_steering(frame)
         throttle = 1.0 if frame.get('inputUp', False) else 0.0
         
+        # Handle gamepad input if it exists
+        if 'gamepadStickX' in frame:
+            steering = frame['gamepadStickX']
+        if 'gamepadGas' in frame:
+            throttle = frame['gamepadGas']
+            if frame['gamepadBrake'] > 0: # Prioritize braking
+                throttle = 0.0
+
         return (
             torch.FloatTensor(features),
             torch.FloatTensor([steering]),
@@ -147,26 +155,43 @@ class TelemetryDataset(Dataset):
         
         # Use ray distances as features
         ray_distances = frame.get('playerRayDistances', [1, 1, 1, 1, 1])
-        ray_features = ray_distances[:5] # <-- CHANGE TO 5
+        ray_features = ray_distances[:5] # 5 rays
 
-        # Pad with zeros if needed
-        while len(ray_features) < 5: # <-- CHANGE TO 5
+        # Pad with 1.0 if needed
+        while len(ray_features) < 5: 
             ray_features.append(1.0)
 
         features = [
             norm_x, norm_y, norm_vx, norm_vy, 
             norm_angle, speed
-        ] + ray_features[:5] # <-- CHANGE TO 5        
+        ] + ray_features[:5] # 11 features total
+        
         return features
     
     def _calculate_steering(self, frame):
         """Convert keyboard input to steering value"""
+        # Check for gamepad input first
+        if 'gamepadStickX' in frame:
+            return frame['gamepadStickX']
+        
+        # Fallback to keyboard
         if frame.get('inputLeft', False):
             return -1.0
         elif frame.get('inputRight', False):
             return 1.0
         else:
             return 0.0
+        
+    def _calculate_throttle(self, frame):
+        """Convert keyboard/gamepad input to throttle value"""
+        # Check for gamepad input first
+        if 'gamepadGas' in frame:
+            if frame['gamepadBrake'] > 0.1:
+                return 0.0 # Brake overrides gas
+            return frame['gamepadGas']
+
+        # Fallback to keyboard
+        return 1.0 if frame.get('inputUp', False) else 0.0
 
 
 # ============================================================================
@@ -174,19 +199,19 @@ class TelemetryDataset(Dataset):
 # ============================================================================
 
 class RacingAITrainer:
-    def __init__(self, canvas_width=1024, canvas_height=768, 
+    def __init__(self, canvas_width=1200, canvas_height=1200, 
                  device='cuda' if torch.cuda.is_available() else 'cpu'):
         self.device = device
         self.canvas_width = canvas_width
         self.canvas_height = canvas_height
         
-        # Input size: 9 features (6 base + 3 ray distances)
+        # 11 features (6 base + 5 ray distances)
         input_size = 11
         
         self.model = RacingPolicyNetwork(input_size=input_size).to(device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
         self.steering_loss_fn = nn.MSELoss()
-        self.throttle_loss_fn = nn.BCELoss()
+        self.throttle_loss_fn = nn.MSELoss() # Use MSE for analog throttle
         
         self.training_history = {
             'loss': [],
@@ -231,7 +256,7 @@ class RacingAITrainer:
                 s_loss = self.steering_loss_fn(steering_pred, steering_target)
                 t_loss = self.throttle_loss_fn(throttle_pred, throttle_target)
                 
-                loss = s_loss + t_loss
+                loss = s_loss + (t_loss * 0.5) # Weight steering loss higher
                 loss.backward()
                 self.optimizer.step()
                 
@@ -254,7 +279,7 @@ class RacingAITrainer:
                     s_loss = self.steering_loss_fn(steering_pred, steering_target)
                     t_loss = self.throttle_loss_fn(throttle_pred, throttle_target)
                     
-                    val_loss += (s_loss + t_loss).item()
+                    val_loss += (s_loss + (t_loss * 0.5)).item()
             
             # Calculate averages
             avg_train_loss = train_loss / len(train_loader)
@@ -355,159 +380,114 @@ class RacingAITrainer:
 class RacingAIInference:
     """
     Lightweight inference class for running trained model.
-    Use this in your WebSocket server on Raspberry Pi.
     """
     def __init__(self, model_path, device='cpu'):
         self.device = device
         
         # Load model checkpoint
         checkpoint = torch.load(model_path, map_location=device)
-        self.canvas_width = checkpoint.get('canvas_width', 1024)
-        self.canvas_height = checkpoint.get('canvas_height', 768)
+        self.canvas_width = checkpoint.get('canvas_width', 1200)
+        self.canvas_height = checkpoint.get('canvas_height', 1200)
         self.max_speed = 300
         
         # Initialize model
         self.model = RacingPolicyNetwork(input_size=11).to(device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.model.eval()
-        
-        print(f"🤖 Inference model loaded on {device}")
+        self.model.eval() # Set model to evaluation mode
     
-    def predict(self, game_state):
-        """
-        Given current game state, predict steering and throttle.
+    def _extract_features(self, state):
+        """Helper to convert game state dict to tensor"""
+        pos_x = state['x']
+        pos_y = state['y']
+        vel_x = state['vx']
+        vel_y = state['vy']
+        angle = state['angle']
         
-        Args:
-            game_state: dict with keys: x, y, vx, vy, angle, rayDistances
+        norm_x = pos_x / self.canvas_width
+        norm_y = pos_y / self.canvas_height
+        norm_vx = vel_x / self.max_speed
+        norm_vy = vel_y / self.max_speed
+        norm_angle = angle / np.pi
+        speed = np.sqrt(vel_x**2 + vel_y**2) / self.max_speed
         
-        Returns:
-            dict: {'steering': float, 'throttle': float}
+        ray_features = state.get('rayDistances', [1, 1, 1, 1, 1])[:5]
+        while len(ray_features) < 5:
+            ray_features.append(1.0)
+            
+        features = [
+            norm_x, norm_y, norm_vx, norm_vy, 
+            norm_angle, speed
+        ] + ray_features
+        
+        return torch.FloatTensor(features).to(self.device)
+
+    def predict(self, state):
         """
-        features = self._extract_features(game_state)
-        features_tensor = torch.FloatTensor(features).unsqueeze(0).to(self.device)
+        Run inference on a single game state.
+        'state' is the JSON object from the game.
+        """
+        features_tensor = self._extract_features(state)
         
         with torch.no_grad():
-            steering, throttle = self.model(features_tensor)
+            steering_pred, throttle_pred = self.model(features_tensor)
         
         return {
-            'steering': float(steering[0][0]),
-            'throttle': float(throttle[0][0])
+            "steering": steering_pred.item(),
+            "throttle": throttle_pred.item()
         }
-    
-    def _extract_features(self, game_state):
-        """Same feature extraction as training"""
-        norm_x = game_state['x'] / self.canvas_width
-        norm_y = game_state['y'] / self.canvas_height
-        norm_vx = game_state['vx'] / self.max_speed
-        norm_vy = game_state['vy'] / self.max_speed
-        norm_angle = game_state['angle'] / np.pi
-        speed = np.sqrt(game_state['vx']**2 + game_state['vy']**2) / self.max_speed
-        
-        ray_distances = game_state.get('rayDistances', [1, 1, 1, 1, 1])
-        ray_features = ray_distances[:5] # <-- CHANGE TO 5
-
-        while len(ray_features) < 5: # <-- CHANGE TO 5
-            ray_features.append(1.0)
-
-        return [norm_x, norm_y, norm_vx, norm_vy, norm_angle, speed] + ray_features[:5] # <-- CHANGE TO 5
 
 
 # ============================================================================
-# MAIN TRAINING SCRIPT
+# MAIN EXECUTION BLOCK
 # ============================================================================
-
-def main():
-    print("=" * 70)
-    print("🏎️  RACING AI TRAINER")
-    print("=" * 70)
-    print()
-    
-    # Configuration
-    CANVAS_WIDTH = 1024
-    CANVAS_HEIGHT = 768
-    BATCH_SIZE = 64
-    EPOCHS = 50
-    TRAIN_SPLIT = 0.8
-    
-    # Load telemetry data
-    data_folder = Path('telemetry_data')
-    
-    if not data_folder.exists():
-        print(f"❌ Error: '{data_folder}' folder not found!")
-        print(f"   Creating it now...")
-        data_folder.mkdir()
-        print(f"   Add your telemetry JSON files to this folder and run again.")
-        return
-    
-    json_files = list(data_folder.glob('*.json'))
-    
-    if not json_files:
-        print(f"❌ Error: No JSON files found in '{data_folder}'")
-        print(f"   Play the game and export telemetry data first.")
-        return
-    
-    print(f"📁 Found {len(json_files)} telemetry file(s):")
-    for f in json_files:
-        size_kb = f.stat().st_size / 1024
-        print(f"   • {f.name} ({size_kb:.1f} KB)")
-    print()
-    
-    # Create dataset
-    try:
-        dataset = TelemetryDataset(json_files, CANVAS_WIDTH, CANVAS_HEIGHT)
-    except ValueError as e:
-        print(f"❌ {e}")
-        return
-    
-    # Split into train/validation
-    train_size = int(TRAIN_SPLIT * len(dataset))
-    val_size = len(dataset) - train_size
-    train_dataset, val_dataset = torch.utils.data.random_split(
-        dataset, [train_size, val_size]
-    )
-    
-    print(f"📊 Dataset split:")
-    print(f"   Training: {train_size} frames ({TRAIN_SPLIT*100:.0f}%)")
-    print(f"   Validation: {val_size} frames ({(1-TRAIN_SPLIT)*100:.0f}%)")
-    print()
-    
-    # Create data loaders
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
-    
-    # Initialize trainer
-    trainer = RacingAITrainer(CANVAS_WIDTH, CANVAS_HEIGHT)
-    
-    # Train model
-    start_time = datetime.now()
-    trainer.train(train_loader, val_loader, epochs=EPOCHS)
-    training_time = (datetime.now() - start_time).total_seconds()
-    
-    # Save models
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_path = f'racing_ai_model_{timestamp}.pth'
-    trainer.save_model(model_path)
-    trainer.save_model('racing_ai_model.pth')
-    
-    # Plot results
-    trainer.plot_training_history(f'training_history_{timestamp}.png')
-    
-    # Final summary
-    print("\n" + "=" * 70)
-    print("✅ TRAINING COMPLETE!")
-    print("=" * 70)
-    print(f"\n⏱️  Training time: {training_time/60:.1f} minutes")
-    print(f"\n📦 Models saved:")
-    print(f"   • racing_ai_model.pth (for deployment)")
-    print(f"   • {model_path} (timestamped backup)")
-    print(f"\n📊 Training plot: training_history_{timestamp}.png")
-    print(f"\n🚀 Next steps:")
-    print(f"   1. Review the training plot")
-    print(f"   2. Copy racing_ai_model.pth to Raspberry Pi")
-    print(f"   3. Run MCP server on Pi")
-    print(f"   4. Connect your game!")
-    print("=" * 70)
-
 
 if __name__ == "__main__":
-    main()
+    
+    # 1. Find all telemetry files
+    # Assumes your JSONs are in a subfolder named 'telemetry_data'
+    # and you run this script from the 'AI' directory.
+    DATA_DIR = Path("telemetry_data") 
+    if not DATA_DIR.exists():
+        print(f"Error: Data directory not found at '{DATA_DIR.resolve()}'")
+        print("Please create it and add your telemetry.json files.")
+    else:
+        json_files = list(DATA_DIR.glob("*.json"))
+        
+        if not json_files:
+            print(f"No .json files found in {DATA_DIR}. Stopping.")
+            print("Go play the game and press 'E' to export telemetry!")
+        else:
+            print(f"Found {len(json_files)} telemetry files.")
+            
+            # 2. Create Dataset
+            full_dataset = TelemetryDataset(json_files, canvas_width=1200, canvas_height=1200)
+            
+            if len(full_dataset) > 0:
+                # 3. Split into Training and Validation sets (80/20 split)
+                train_size = int(0.8 * len(full_dataset))
+                val_size = len(full_dataset) - train_size
+                train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
+                
+                print(f"Splitting data: {len(train_dataset)} train, {len(val_dataset)} validation")
+
+                # 4. Create DataLoaders
+                BATCH_SIZE = 32
+                train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+                val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
+
+                # 5. Initialize and run the trainer
+                trainer = RacingAITrainer()
+                trainer.train(train_loader, val_loader, epochs=50, patience=10)
+
+                # 6. Save final model and plots with a unique timestamp
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                model_save_path = f"racing_ai_model_{timestamp}.pth"
+                plot_save_path = f"training_history_{timestamp}.png"
+                
+                trainer.save_model(model_save_path)
+                trainer.plot_training_history(plot_save_path)
+                
+                print(f"\n✅ All done! Final model saved to {model_save_path}")
+                print(f"📈 Training plot saved to {plot_save_path}")
+            else:
+                print("Dataset was loaded but is empty. Cannot train.")

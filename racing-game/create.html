@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Racing Game - Track Creator</title>
+    <style>
+        body {
+            margin: 0; padding: 0; display: flex; justify-content: center;
+            align-items: center; height: 100vh; background: #222;
+            font-family: Arial, sans-serif; overflow: hidden;
+        }
+        #game-container { display: flex; flex-direction: row; }
+        canvas { display: block; }
+        #toolbox {
+            width: 150px;
+            height: 1200px; /* Match 1200px canvas */
+            background: #333; color: #fff;
+            padding: 10px; box-sizing: border-box; display: flex;
+            flex-direction: column; align-items: center;
+            overflow-y: auto; /* Allow scrolling */
+        }
+        #toolbox h3 {
+            margin-top: 0; text-align: center; border-bottom: 1px solid #555;
+            padding-bottom: 10px; width: 100%;
+        }
+        .track-piece {
+            width: 100px; height: 100px; background: #555;
+            border: 2px dashed #888; margin: 10px 0; display: flex;
+            justify-content: center; align-items: center; font-size: 14px;
+            font-weight: bold; cursor: grab; user-select: none;
+            flex-shrink: 0; 
+        }
+        .track-piece:active { cursor: grabbing; }
+        #toolbox button {
+            background: #c00; color: white; border: none;
+            padding: 10px; width: 100%; cursor: pointer;
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+        #toolbox button:hover { background: #e00; }
+        #save-button {
+            background: #008cba;
+            margin-bottom: 10px;
+        }
+        #save-button:hover { background: #00aef5; }
+        #clear-button {
+            margin-top: auto; /* Pushes to bottom */
+        }
+        .nav-links a {
+            display: inline-block;
+            padding: 15px 30px;
+            margin: 10px;
+            background: #00ffff;
+            color: #222;
+            text-decoration: none;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .nav-links a:hover {
+            background: #fff;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        
+        <div id="toolbox">
+            <h3>Track Editor</h3>
+
+            <div class="track-piece" draggable="true" data-type="road">
+                Road (Empty)
+            </div>
+            <div class="track-piece" draggable="true" data-type="straight-h">
+                Straight (H)
+            </div>
+            <div class="track-piece" draggable="true" data-type="straight-v">
+                Straight (V)
+            </div>
+            <div class="track-piece" draggable="true" data-type="wall-t">
+                Wall (Top)
+            </div>
+            <div class="track-piece" draggable="true" data-type="wall-b">
+                Wall (Bottom)
+            </div>
+            <div class="track-piece" draggable="true" data-type="wall-l">
+                Wall (Left)
+            </div>
+            <div class="track-piece" draggable="true" data-type="wall-r">
+                Wall (Right)
+            </div>
+            <div class="track-piece" draggable="true" data-type="turn-l">
+                Turn (TL)
+            </div>
+            <div class="track-piece" draggable="true" data-type="turn-r">
+                Turn (TR)
+            </div>
+            <div class="track-piece" draggable="true" data-type="turn-bl">
+                Turn (BL)
+            </div>
+            <div class="track-piece" draggable="true" data-type="turn-br">
+                Turn (BR)
+            </div>
+            
+            <button id="save-button">Save Track</button>
+            <button id="clear-button">Clear Track</button>
+        </div>
+        
+    </div>
+
+    <script type="module" src="src/creator.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const pieces = document.querySelectorAll('.track-piece');
+            pieces.forEach(piece => {
+                piece.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', e.target.dataset.type);
+                    e.dataTransfer.effectAllowed = 'copy';
+                });
+            });
+            const gameCanvas = document.querySelector('canvas');
+            if (gameCanvas) {
+                gameCanvas.addEventListener('dragover', (e) => {
+                    e.preventDefault(); e.dataTransfer.dropEffect = 'copy';
+                    const bounds = gameCanvas.getBoundingClientRect();
+                    const x = e.clientX - bounds.left;
+                    const y = e.clientY - bounds.top;
+                    if (window.game) window.game.events.emit('updatePreview', { x, y });
+                });
+                gameCanvas.addEventListener('dragleave', (e) => {
+                    if (window.game) window.game.events.emit('hidePreview');
+                });
+                gameCanvas.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    const pieceType = e.dataTransfer.getData('text/plain');
+                    const bounds = gameCanvas.getBoundingClientRect();
+                    const x = e.clientX - bounds.left;
+                    const y = e.clientY - bounds.top;
+                    if (window.game) window.game.events.emit('addTrackPiece', { pieceType, x, y });
+                });
+            }
+            const clearButton = document.getElementById('clear-button');
+            clearButton.addEventListener('click', () => {
+                if (window.game) window.game.events.emit('clearTrack');
+            });
+            const saveButton = document.getElementById('save-button');
+            saveButton.addEventListener('click', () => {
+                if (window.game) window.game.events.emit('saveTrack');
+            });
+        });
+    </script>
+</body>
+
+    <div class="nav-links">
+        <a href="index.html">Index</a>
+    </div>
+
+
+</html>
