@@ -3,6 +3,8 @@ import Phaser from 'phaser';
 // Define and EXPORT dimensions for our preset track pieces
 export const PIECE_WIDTH = 100; // e.g., a straight piece is 100x100
 const WALL_THICKNESS = 10;
+const GRID_WIDTH = 8; // 800px canvas / 100px pieces
+const GRID_HEIGHT = 8; // 800px canvas / 100px pieces
 
 /**
  * Manages creating and editing the race track.
@@ -16,39 +18,28 @@ export class TrackEditor {
         this.wallBodies = []; // To hold Matter.js bodies
         this.graphics = this.scene.add.graphics();
 
-        // Store the constant for easy access by other classes
+        // This is our new data model for the map
+        this.mapGrid = Array(GRID_HEIGHT).fill(null).map(() => Array(GRID_WIDTH).fill(null));
+        
         this.PIECE_WIDTH = PIECE_WIDTH;
     }
 
     /**
      * Creates the default oval track.
+     * This now just populates the wallBodies and geomWalls directly,
+     * as it's not grid-based.
      */
     createOvalTrack() {
-        // ... (rest of the function is unchanged) ...
-        // --- Visual Road Surface ---
-        // 1. Draw the outer road boundary
         this.graphics.fillStyle(0x333333, 1);
         this.graphics.fillRect(100, 100, 600, 600);
-        // 2. "Cut out" the middle
-        this.graphics.fillStyle(0x222222, 1); // Background color
+        this.graphics.fillStyle(0x222222, 1);
         this.graphics.fillRect(200, 200, 400, 400);
-
-        // --- Track & Wall Data (Oval) ---
         const trackData = [
-            // Outer Walls
-            { x: 400, y: 95,  w: 610, h: 10 },  // Top
-            { x: 400, y: 705, w: 610, h: 10 },  // Bottom
-            { x: 95,  y: 400, w: 10,  h: 610 },  // Left
-            { x: 705, y: 400, w: 10,  h: 610 },  // Right
-            
-            // Inner Walls
-            { x: 400, y: 205, w: 410, h: 10 },  // Inner Top
-            { x: 400, y: 595, w: 410, h: 10 },  // Inner Bottom
-            { x: 195, y: 400, w: 10,  h: 410 },  // Inner Left
-            { x: 605, y: 400, w: 10,  h: 410 }   // Inner Right
+            { x: 400, y: 95,  w: 610, h: 10 }, { x: 400, y: 705, w: 610, h: 10 },
+            { x: 95,  y: 400, w: 10,  h: 610 }, { x: 705, y: 400, w: 10,  h: 610 },
+            { x: 400, y: 205, w: 410, h: 10 }, { x: 400, y: 595, w: 410, h: 10 },
+            { x: 195, y: 400, w: 10,  h: 410 }, { x: 605, y: 400, w: 10,  h: 410 }
         ];
-        
-        // --- Build Physics and Raycast Walls from Data ---
         trackData.forEach(wall => {
             this.addWall(wall.x, wall.y, wall.w, wall.h);
         });
@@ -59,61 +50,160 @@ export class TrackEditor {
      * (This function is unchanged)
      */
     addWall(x, y, w, h) {
-        // ... (unchanged) ...
         const wallOptions = { isStatic: true, friction: 0.0, restitution: 0.1, label: 'wall' };
-
-        // 1. Add Matter.js physics body (invisible)
         const body = this.scene.matter.add.rectangle(x, y, w, h, wallOptions);
         this.wallBodies.push(body);
-
-        // 2. Add Phaser.Geom.Rectangle for raycasting (top-left based)
         const geomRect = new Phaser.Geom.Rectangle(x - w / 2, y - h / 2, w, h);
         this.geomWalls.push(geomRect);
     }
 
     /**
-     * Adds a new track piece based on a type and world coordinates.
-     * (This function is unchanged)
+     * MODIFIED: This function now just updates the data grid
+     * and triggers a full redraw.
      */
     addTrackPiece(pieceType, x, y) {
-        // ... (unchanged) ...
-        // Draw the visual "road" part
+        // 1. Update the grid data structure
+        const gridX = Math.floor((x - PIECE_WIDTH / 2) / PIECE_WIDTH);
+        const gridY = Math.floor((y - PIECE_WIDTH / 2) / PIECE_WIDTH);
+
+        if (gridY >= 0 && gridY < GRID_HEIGHT && gridX >= 0 && gridX < GRID_WIDTH) {
+            // NEW: "road" piece sets the grid cell to null (empty)
+            if (pieceType === 'road') {
+                this.mapGrid[gridY][gridX] = null;
+            } else {
+                this.mapGrid[gridY][gridX] = pieceType;
+            }
+        } else {
+            console.error("Attempted to place piece outside grid");
+            return;
+        }
+
+        // 2. Redraw the entire map from the grid
+        this.redrawAllFromGrid();
+    }
+
+    /**
+     * NEW: Clears all visuals/physics and redraws the track
+     * based on the current mapGrid data.
+     */
+    redrawAllFromGrid() {
+        // 1. Clear all existing graphics and physics
+        this.graphics.clear();
+        this.scene.matter.world.remove(this.wallBodies);
+        this.wallBodies = [];
+        this.geomWalls = [];
+        
+        // 2. Redraw background
+        this.graphics.fillStyle(0x222222, 1);
+        this.graphics.fillRect(0, 0, this.scene.cameras.main.width, this.scene.cameras.main.height);
+
+        // 3. Loop through the grid and draw each piece
+        for (let y = 0; y < GRID_HEIGHT; y++) {
+            for (let x = 0; x < GRID_WIDTH; x++) {
+                const pieceType = this.mapGrid[y][x];
+                if (pieceType) {
+                    const worldX = x * PIECE_WIDTH + PIECE_WIDTH / 2;
+                    const worldY = y * PIECE_WIDTH + PIECE_WIDTH / 2;
+                    this.drawPiece(pieceType, worldX, worldY);
+                }
+            }
+        }
+    }
+
+    /**
+     * NEW: This function contains the logic for drawing a
+     * single piece. (Extracted from old addTrackPiece)
+     */
+    drawPiece(pieceType, x, y) {
+        // Draw the base road tile for all pieces first
         this.graphics.fillStyle(0x333333, 1);
         this.graphics.fillRect(x - PIECE_WIDTH / 2, y - PIECE_WIDTH / 2, PIECE_WIDTH, PIECE_WIDTH);
+        
+        // Define wall coordinates
+        const topWall    = { x: x, y: y - PIECE_WIDTH / 2 + WALL_THICKNESS / 2, w: PIECE_WIDTH, h: WALL_THICKNESS };
+        const bottomWall = { x: x, y: y + PIECE_WIDTH / 2 - WALL_THICKNESS / 2, w: PIECE_WIDTH, h: WALL_THICKNESS };
+        const leftWall   = { x: x - PIECE_WIDTH / 2 + WALL_THICKNESS / 2, y: y, w: WALL_THICKNESS, h: PIECE_WIDTH };
+        const rightWall  = { x: x + PIECE_WIDTH / 2 - WALL_THICKNESS / 2, y: y, w: WALL_THICKNESS, h: PIECE_WIDTH };
 
-        // Add walls based on the piece type
         switch (pieceType) {
+            case 'road':
+                // Handled by "road" being null in the grid,
+                // but if it's called, just draw the road (already done).
+                break;
+            
+            // Straights
             case 'straight-h':
-                // Top wall
-                this.addWall(x, y - PIECE_WIDTH / 2 + WALL_THICKNESS / 2, PIECE_WIDTH, WALL_THICKNESS);
-                // Bottom wall
-                this.addWall(x, y + PIECE_WIDTH / 2 - WALL_THICKNESS / 2, PIECE_WIDTH, WALL_THICKNESS);
+                this.addWall(topWall.x, topWall.y, topWall.w, topWall.h);
+                this.addWall(bottomWall.x, bottomWall.y, bottomWall.w, bottomWall.h);
                 break;
             
             case 'straight-v':
-                // Left wall
-                this.addWall(x - PIECE_WIDTH / 2 + WALL_THICKNESS / 2, y, WALL_THICKNESS, PIECE_WIDTH);
-                // Right wall
-                this.addWall(x + PIECE_WIDTH / 2 - WALL_THICKNESS / 2, y, WALL_THICKNESS, PIECE_WIDTH);
+                this.addWall(leftWall.x, leftWall.y, leftWall.w, leftWall.h);
+                this.addWall(rightWall.x, rightWall.y, rightWall.w, rightWall.h);
                 break;
             
-            case 'turn-l': // e.g., a top-left corner piece
-                // Top wall
-                this.addWall(x, y - PIECE_WIDTH / 2 + WALL_THICKNESS / 2, PIECE_WIDTH, WALL_THICKNESS);
-                // Left wall
-                this.addWall(x - PIECE_WIDTH / 2 + WALL_THICKNESS / 2, y, WALL_THICKNESS, PIECE_WIDTH);
-                
-                // Draw inner "cutout"
+            // Single Walls
+            case 'wall-t':
+                this.addWall(topWall.x, topWall.y, topWall.w, topWall.h);
+                break;
+            case 'wall-b':
+                this.addWall(bottomWall.x, bottomWall.y, bottomWall.w, bottomWall.h);
+                break;
+            case 'wall-l':
+                this.addWall(leftWall.x, leftWall.y, leftWall.w, leftWall.h);
+                break;
+            case 'wall-r':
+                this.addWall(rightWall.x, rightWall.y, rightWall.w, rightWall.h);
+                break;
+
+            // Turns
+            case 'turn-l': // Top-left corner
+                this.addWall(topWall.x, topWall.y, topWall.w, topWall.h);
+                this.addWall(leftWall.x, leftWall.y, leftWall.w, leftWall.h);
                 this.graphics.fillStyle(0x222222, 1);
                 this.graphics.fillRect(
-                    x - PIECE_WIDTH / 2, 
-                    y - PIECE_WIDTH / 2, 
+                    x + PIECE_WIDTH / 2 - (PIECE_WIDTH - WALL_THICKNESS),
+                    y + PIECE_WIDTH / 2 - (PIECE_WIDTH - WALL_THICKNESS),
                     PIECE_WIDTH - WALL_THICKNESS, 
                     PIECE_WIDTH - WALL_THICKNESS
                 );
                 break;
             
-            // Add more cases for other turns (right, bottom-left, etc.)
+            case 'turn-r': // Top-right corner
+                this.addWall(topWall.x, topWall.y, topWall.w, topWall.h);
+                this.addWall(rightWall.x, rightWall.y, rightWall.w, rightWall.h);
+                this.graphics.fillStyle(0x222222, 1);
+                this.graphics.fillRect(
+                    x - PIECE_WIDTH / 2,
+                    y + PIECE_WIDTH / 2 - (PIECE_WIDTH - WALL_THICKNESS),
+                    PIECE_WIDTH - WALL_THICKNESS, 
+                    PIECE_WIDTH - WALL_THICKNESS
+                );
+                break;
+
+            case 'turn-bl': // Bottom-left corner
+                this.addWall(bottomWall.x, bottomWall.y, bottomWall.w, bottomWall.h);
+                this.addWall(leftWall.x, leftWall.y, leftWall.w, leftWall.h);
+                this.graphics.fillStyle(0x222222, 1);
+                this.graphics.fillRect(
+                    x + PIECE_WIDTH / 2 - (PIECE_WIDTH - WALL_THICKNESS),
+                    y - PIECE_WIDTH / 2,
+                    PIECE_WIDTH - WALL_THICKNESS, 
+                    PIECE_WIDTH - WALL_THICKNESS
+                );
+                break;
+
+            case 'turn-br': // Bottom-right corner
+                this.addWall(bottomWall.x, bottomWall.y, bottomWall.w, bottomWall.h);
+                this.addWall(rightWall.x, rightWall.y, rightWall.w, rightWall.h);
+                this.graphics.fillStyle(0x222222, 1);
+                this.graphics.fillRect(
+                    x - PIECE_WIDTH / 2,
+                    y - PIECE_WIDTH / 2,
+                    PIECE_WIDTH - WALL_THICKNESS, 
+                    PIECE_WIDTH - WALL_THICKNESS
+                );
+                break;
         }
     }
 
@@ -122,28 +212,54 @@ export class TrackEditor {
      * (This function is unchanged)
      */
     getGeomWalls() {
-        // ... (unchanged) ...
         return this.geomWalls;
     }
 
     /**
-     * Clears the entire track.
-     * (This function is unchanged)
+     * MODIFIED: Clears the track by resetting the grid
+     * and redrawing the empty state.
      */
     clearTrack() {
-        // ... (unchanged) ...
-        // Clear graphics
-        this.graphics.clear();
+        // 1. Reset the data grid
+        this.mapGrid = Array(GRID_HEIGHT).fill(null).map(() => Array(GRID_WIDTH).fill(null));
         
-        // Remove physics bodies
-        this.scene.matter.world.remove(this.wallBodies);
+        // 2. Redraw the (now empty) grid
+        this.redrawAllFromGrid();
         
-        // Clear arrays
-        this.wallBodies = [];
-        this.geomWalls = [];
-
-        // Redraw background
-        this.graphics.fillStyle(0x222222, 1);
-        this.graphics.fillRect(0, 0, this.scene.cameras.main.width, this.scene.cameras.main.height);
+        // 3. Clear from storage
+        localStorage.removeItem('customMap');
+        console.log('Track cleared and storage erased.');
+    }
+    
+    /**
+     * Saves the current map grid to local storage.
+     * (This function is unchanged)
+     */
+    saveTrack() {
+        localStorage.setItem('customMap', JSON.stringify(this.mapGrid));
+        alert('Track Saved!');
+        console.log('Track saved to localStorage.');
+    }
+    
+    /**
+     * MODIFIED: Loads track from local storage and
+     * builds it by triggering a full redraw.
+     */
+    loadTrack() {
+        const savedGrid = localStorage.getItem('customMap');
+        if (!savedGrid) {
+            console.log('No custom map found in storage.');
+            // Draw the empty background
+            this.redrawAllFromGrid();
+            return false;
+        }
+        
+        console.log('Loading custom map from storage...');
+        this.mapGrid = JSON.parse(savedGrid);
+        
+        // Redraw the entire map from the loaded grid data
+        this.redrawAllFromGrid();
+        
+        return true;
     }
 }

@@ -71,7 +71,7 @@ class TelemetryDataset(Dataset):
     Loads telemetry JSON files exported from the Phaser game.
     Converts game state into neural network input features.
     """
-    def __init__(self, json_files, canvas_width=1024, canvas_height=768):
+    def __init__(self, json_files, canvas_width=800, canvas_height=800):
         self.data = []
         self.canvas_width = canvas_width
         self.canvas_height = canvas_height
@@ -174,7 +174,7 @@ class TelemetryDataset(Dataset):
 # ============================================================================
 
 class RacingAITrainer:
-    def __init__(self, canvas_width=1024, canvas_height=768, 
+    def __init__(self, canvas_width=800, canvas_height=800, 
                  device='cuda' if torch.cuda.is_available() else 'cpu'):
         self.device = device
         self.canvas_width = canvas_width
@@ -362,8 +362,8 @@ class RacingAIInference:
         
         # Load model checkpoint
         checkpoint = torch.load(model_path, map_location=device)
-        self.canvas_width = checkpoint.get('canvas_width', 1024)
-        self.canvas_height = checkpoint.get('canvas_height', 768)
+        self.canvas_width = checkpoint.get('canvas_width', 800)
+        self.canvas_height = checkpoint.get('canvas_height', 800)
         self.max_speed = 300
         
         # Initialize model
@@ -423,8 +423,8 @@ def main():
     print()
     
     # Configuration
-    CANVAS_WIDTH = 1024
-    CANVAS_HEIGHT = 768
+    CANVAS_WIDTH = 800
+    CANVAS_HEIGHT = 800
     BATCH_SIZE = 64
     EPOCHS = 50
     TRAIN_SPLIT = 0.8
@@ -448,7 +448,7 @@ def main():
     
     print(f"📁 Found {len(json_files)} telemetry file(s):")
     for f in json_files:
-        size_kb = f.stat().st_size / 1024
+        size_kb = f.stat().st_size / 800
         print(f"   • {f.name} ({size_kb:.1f} KB)")
     print()
     

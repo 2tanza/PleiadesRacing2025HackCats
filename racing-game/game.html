@@ -1,10 +1,6 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pleiades Racing</title>
-    <style>
+<html>
+        <style>
         body {
             font-family: Arial, sans-serif;
             background: #222;
@@ -43,18 +39,39 @@
             background: #fff;
         }
     </style>
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Racing Game - Play</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #222;
+            font-family: Arial, sans-serif;
+        }
+        /* This container is required by the game's config */
+        #game-container {
+            display: flex;
+            flex-direction: row;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Pleiades Racing AI</h1>
-        <p>
-            Welcome! You can play the game with the default (or saved) track,
-            or head over to the creator to build your own.
-        </p>
-        <div class="nav-links">
-            <a href="game.html">Play Game</a>
-            <a href="create.html">Create Track</a>
-        </div>
+    <div id="game-container"></div>
+    
+    <script type="module" src="/src/game.js"></script>
+    <div class="nav-links">
+        <a href="index.html">Index</a>
     </div>
+
 </body>
 </html>
