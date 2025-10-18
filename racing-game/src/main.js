@@ -20,6 +20,16 @@ class GameScene extends Phaser.Scene {
 
     }
 
+    getCarPolygon(car) {
+        // Safety check
+        if (!car || !car.body || !car.body.vertices) {
+            return new Phaser.Geom.Polygon(); 
+        }
+        
+        // Just return a new polygon straight from the body's vertices.
+        // These vertices are already in world-space, which is what we want.
+        return new Phaser.Geom.Polygon(car.body.vertices);
+    }
 
 
     create() {
@@ -97,6 +107,11 @@ class GameScene extends Phaser.Scene {
         this.rayDistances = [0, 0, 0, 0, 0];
 
         this.rayGraphics = this.add.graphics();
+
+        
+        // --- Ray sensors (AI) ---
+        this.aiRayDistances = [0, 0, 0, 0, 0];
+        this.aiRayGraphics = this.add.graphics();
 
        
 
@@ -214,21 +229,29 @@ class GameScene extends Phaser.Scene {
     }
 
 
-
-    castRaysFromCar() {
+/**
+     * Casts 5 rays from a car and checks for intersections against walls and other dynamic polygons.
+     * @param {Phaser.GameObjects.GameObject} car The car to cast rays from (this.playerCar or this.aiCar)
+     * @param {Phaser.GameObjects.Graphics} graphics The graphics object to draw rays on
+     * @param {number[]} distances The array to store the resulting distances in
+     * @param {Phaser.Geom.Rectangle[]} walls An array of static wall Rectangles
+     * @param {Phaser.Geom.Polygon[]} otherPolygons An array of dynamic polygons to check against (e.g., the other car)
+     * @param {number} rayColor The color to draw the rays (e.g., 0x00ff00)
+     */
+    castRays(car, graphics, distances, walls, otherPolygons, rayColor) {
         const rayAngles = [
-            this.playerCar.rotation,                           // Front
-            this.playerCar.rotation - Math.PI / 4,             // Front-left
-            this.playerCar.rotation + Math.PI / 4,             // Front-right
-            this.playerCar.rotation - Math.PI / 2,             // Left
-            this.playerCar.rotation + Math.PI / 2              // Right
+            car.rotation,                           // Front
+            car.rotation - Math.PI / 4,             // Front-left
+            car.rotation + Math.PI / 4,             // Front-right
+            car.rotation - Math.PI / 2,             // Left
+            car.rotation + Math.PI / 2              // Right
         ];
        
-        this.rayGraphics.clear();
-        this.rayGraphics.lineStyle(1, 0x00ff00, 0.5);
+        graphics.clear();
+        graphics.lineStyle(1, rayColor, 0.5);
        
-        const carX = this.playerCar.x;
-        const carY = this.playerCar.y;
+        const carX = car.x;
+        const carY = car.y;
 
         rayAngles.forEach((angle, index) => {
             // Define the ray as a Phaser.Geom.Line
@@ -239,18 +262,13 @@ class GameScene extends Phaser.Scene {
             let closestDistance = this.RAY_LENGTH;
             let closestHitPoint = { x: endX, y: endY }; // Default to end of ray
            
-            // Check intersection against EACH wall
-            this.geomWalls.forEach(wallRect => {
-                // Get all intersection points between the ray line and the wall rectangle
+            // 1. Check intersection against EACH static wall
+            walls.forEach(wallRect => {
                 const intersections = Phaser.Geom.Intersects.GetLineToRectangle(rayLine, wallRect);
 
                 if (intersections.length > 0) {
-                    // Find the closest intersection point on this wall
                     intersections.forEach(point => {
-                        const dx = point.x - carX;
-                        const dy = point.y - carY;
-                        const distance = Math.sqrt(dx * dx + dy * dy);
-                       
+                        const distance = Phaser.Math.Distance.Between(carX, carY, point.x, point.y);
                         if (distance < closestDistance) {
                             closestDistance = distance;
                             closestHitPoint = point;
@@ -258,16 +276,47 @@ class GameScene extends Phaser.Scene {
                     });
                 }
             });
+
+            // 2. Check intersection against EACH dynamic polygon (NEW LOGIC)
+            otherPolygons.forEach(polygon => {
+                const points = polygon.points;
+                if (points.length < 2) return; // Not a valid polygon
+
+                // We must manually check each segment of the polygon
+                for (let i = 0; i < points.length; i++) {
+                    // Get the start point (current point)
+                    const p1 = points[i];
+                    
+                    // Get the end point (next point, wrapping around to the start)
+                    const p2 = points[(i + 1) % points.length];
+
+                    // Create a line segment for this side of the polygon
+                    const segmentLine = new Phaser.Geom.Line(p1.x, p1.y, p2.x, p2.y);
+                    
+                    // Use the more reliable LineToLine intersection check
+                    const intersectionPoint = new Phaser.Geom.Point();
+                    
+                    if (Phaser.Geom.Intersects.LineToLine(rayLine, segmentLine, intersectionPoint)) {
+                        // An intersection was found
+                        const distance = Phaser.Math.Distance.Between(carX, carY, intersectionPoint.x, intersectionPoint.y);
+                        
+                        if (distance < closestDistance) {
+                            closestDistance = distance;
+                            closestHitPoint = { x: intersectionPoint.x, y: intersectionPoint.y };
+                        }
+                    }
+                }
+            });
            
             // Store the normalized distance for this ray
-            this.rayDistances[index] = closestDistance / this.RAY_LENGTH;
+            distances[index] = closestDistance / this.RAY_LENGTH;
            
             // Draw the ray from the car to the actual hit point
-            this.rayGraphics.lineBetween(carX, carY, closestHitPoint.x, closestHitPoint.y);
+            graphics.lineBetween(carX, carY, closestHitPoint.x, closestHitPoint.y);
            
-            // Draw the hit point
-            this.rayGraphics.fillStyle(0xff0000);
-            this.rayGraphics.fillCircle(closestHitPoint.x, closestHitPoint.y, 3);
+            // Draw the hit point (always red)
+            graphics.fillStyle(0xff0000);
+            graphics.fillCircle(closestHitPoint.x, closestHitPoint.y, 3);
         });
     }
 
@@ -310,44 +359,44 @@ class GameScene extends Phaser.Scene {
 
 
     createTelemetryFrame(crashed = false) {
-
-        const vel = this.playerCar.body.velocity;
-
+        const playerVel = this.playerCar.body.velocity;
+        const aiVel = this.aiCar.body.velocity;
+        
         return {
-
             timestamp: Date.now(),
-
+            
+            // Player Data
             playerX: this.playerCar.x,
-
             playerY: this.playerCar.y,
-
-            playerVelX: vel.x,
-
-            playerVelY: vel.y,
-
+            playerVelX: playerVel.x,
+            playerVelY: playerVel.y,
             playerAngle: this.playerCar.rotation,
-
             playerSpeed: this.playerSpeed,
-
-            angularVelocity: this.playerCar.body.angularVelocity,
-
+            playerAngularVelocity: this.playerCar.body.angularVelocity,
+            
+            // AI Data
+            aiX: this.aiCar.x,
+            aiY: this.aiCar.y,
+            aiVelX: aiVel.x,
+            aiVelY: aiVel.y,
+            aiAngle: this.aiCar.rotation,
+            aiSpeed: this.aiSpeed,
+            aiAngularVelocity: this.aiCar.body.angularVelocity,
+            
+            // Input Data
             inputUp: this.keys.up.isDown,
-
             inputDown: this.keys.down.isDown,
-
             inputLeft: this.keys.left.isDown,
-
             inputRight: this.keys.right.isDown,
-
-            rayDistances: [...this.rayDistances],
-
+            
+            // Sensor Data
+            playerRayDistances: [...this.rayDistances],
+            aiRayDistances: [...this.aiRayDistances], // Add AI rays
+            
+            // State
             crashed: crashed
-
         };
-
     }
-
-
 
     update() {
 
@@ -446,8 +495,30 @@ class GameScene extends Phaser.Scene {
 
 
         // --- Cast rays ---
-
-        this.castRaysFromCar();
+        
+        // Get the current polygon boundaries for both cars
+        const playerPolygon = this.getCarPolygon(this.playerCar);
+        const aiPolygon = this.getCarPolygon(this.aiCar);
+        
+        // Cast rays for Player (sees walls and AI car)
+        this.castRays(
+            this.playerCar, 
+            this.rayGraphics, 
+            this.rayDistances, 
+            this.geomWalls, 
+            [aiPolygon],    // Pass AI car as a target
+            0x00ff00          // Green rays
+        );
+        
+        // Cast rays for AI (sees walls and Player car)
+        this.castRays(
+            this.aiCar, 
+            this.aiRayGraphics, 
+            this.aiRayDistances, 
+            this.geomWalls, 
+            [playerPolygon],  // Pass Player car as a target
+            0x00ffff          // Cyan rays
+        );
 
        
 
