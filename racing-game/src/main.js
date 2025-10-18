@@ -2,49 +2,79 @@ import Phaser from 'phaser';
 
 /**
  * A simple AI Agent that follows a set of waypoints.
- * This is the "brain" that can be replaced by a machine learning model.
+ * This version is refactored to output Player-style controls
+ * { thrust, angularVelocity }
+ * to match the ML-refactored GameScene.update()
  */
 class AIAgent {
-    constructor(waypoints, aiSpeed) {
+    constructor(waypoints, acceleration, angularVelocity) {
         this.waypoints = waypoints;
         this.currentWaypointIndex = 0;
-        this.aiSpeed = aiSpeed;
+        
+        // Store the car's physics capabilities
+        this.ACCELERATION_FORCE = acceleration;
+        this.ANGULAR_VELOCITY = angularVelocity;
     }
 
-    /**
+/**
      * The main decision-making function.
      * @param {object} state - The current state of the AI car.
      * @param {number} state.x - The car's x position.
      * @param {number} state.y - The car's y position.
      * @param {number} state.rotation - The car's current angle.
      * @param {number[]} state.rayDistances - The car's 5 sensor readings.
-     * @returns {object} An action object with force and angle.
-     * @returns {object} action.force - {x, y} force to apply.
-     * @returns {number} action.angle - The angle the car should face.
+     * @returns {object} An action object: { thrust, angularVelocity }
      */
     update(state) {
-        // --- This is the simple waypoint-following logic ---
-        // An ML model would replace this section with its own logic,
-        // using the 'state' (especially state.rayDistances) to make a decision.
-        
+        // --- Waypoint-following logic ---
         const waypoint = this.waypoints[this.currentWaypointIndex];
         const dx = waypoint.x - state.x;
         const dy = waypoint.y - state.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        if (distance < 50) {
+        if (distance < 75) { 
             this.currentWaypointIndex = (this.currentWaypointIndex + 1) % this.waypoints.length;
         }
 
-        // Calculate normalized direction vector
-        const targetAngle = Math.atan2(dy, dx);
-        const aiForceX = Math.cos(targetAngle) * this.aiSpeed / 1000;
-        const aiForceY = Math.sin(targetAngle) * this.aiSpeed / 1000;
+        // --- Action Logic ---
 
-        // Return the chosen action
+        // 1. Find the target angle
+        const targetAngle = Math.atan2(dy, dx);
+        
+        // 2. Find the shortest angle difference
+        // angleDiff > 0 means we need to turn Clockwise (Right)
+        // angleDiff < 0 means we need to turn Counter-Clockwise (Left)
+        const angleDiff = Phaser.Math.Angle.ShortestBetween(state.rotation, targetAngle);
+        const absAngleDiff = Math.abs(angleDiff);
+
+        // 3. *** THE CORRECTED STEERING LOGIC ***
+        let angularVelocity = 0;
+        
+        if (angleDiff > 0.03) { 
+            // Need to turn CW (Right)
+            angularVelocity = this.ANGULAR_VELOCITY;  // POSITIVE velocity
+        } else if (angleDiff < -0.03) {
+            // Need to turn CCW (Left)
+            angularVelocity = -this.ANGULAR_VELOCITY; // NEGATIVE velocity
+        }
+        
+        // 4. *** SIMPLIFIED THRUST LOGIC ***
+        let thrust = this.ACCELERATION_FORCE; // Default to accelerating
+
+        // If we have to make a sharp turn (more than ~57 degrees),
+        // cut the engine and just focus on steering.
+        // This prevents spinning out.
+        if (absAngleDiff > 1.0) { 
+            thrust = 0; // Coast
+        }
+
+        // At the start, absAngleDiff is 1.57, so thrust will be 0,
+        // but angularVelocity will be POSITIVE, making it turn correctly to the right.
+        // As it turns, absAngleDiff will drop below 1.0, and thrust will kick in.
+
         return {
-            force: { x: aiForceX, y: aiForceY },
-            angle: targetAngle
+            thrust: thrust,
+            angularVelocity: angularVelocity
         };
     }
 }
@@ -145,8 +175,11 @@ class GameScene extends Phaser.Scene {
         ];
 
         // --- Create the AI Agent "Brain" ---
-        const aiSpeed = 10;
-        this.aiAgent = new AIAgent(this.waypoints, aiSpeed);
+        this.aiAgent = new AIAgent(
+            this.waypoints, 
+            this.ACCELERATION_FORCE, // Give the AI the player's acceleration
+            this.ANGULAR_VELOCITY    // Give the AI the player's turn speed
+        );
         
         // --- Collision Listener ---
         this.matter.world.on('collisionstart', (event, bodyA, bodyB) => {
@@ -361,21 +394,30 @@ class GameScene extends Phaser.Scene {
         );
        
        
-        // --- AI Movement (REFACTORED) ---
+        // --- AI Movement (REFACTORED for ML) ---
         // 1. Get the current state for the AI
         const aiState = {
             x: this.aiCar.x,
             y: this.aiCar.y,
             rotation: this.aiCar.rotation,
+            // Pass in other useful state info
+            speed: Math.sqrt(this.aiCar.body.velocity.x**2 + this.aiCar.body.velocity.y**2),
+            angularVelocity: this.aiCar.body.angularVelocity,
             rayDistances: this.aiRayDistances
         };
 
         // 2. Ask the "brain" for an action
+        // The ML-based agent will return { thrust, angularVelocity }
         const aiAction = this.aiAgent.update(aiState);
         
-        // 3. Apply the action to the "body"
-        this.aiCar.applyForce(aiAction.force);
-        this.aiCar.setRotation(aiAction.angle);
+        // 3. Apply the action to the "body" (Player-style)
+        this.aiCar.setAngularVelocity(aiAction.angularVelocity);
+        if (aiAction.thrust !== 0) {
+            const angle = this.aiCar.rotation;
+            const forceX = Math.cos(angle) * aiAction.thrust;
+            const forceY = Math.sin(angle) * aiAction.thrust;
+            this.aiCar.applyForce({ x: forceX, y: forceY });
+        }
 
        
         // --- Recording and Export ---
