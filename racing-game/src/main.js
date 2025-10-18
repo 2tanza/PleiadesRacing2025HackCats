@@ -76,7 +76,7 @@ class GameScene extends Phaser.Scene {
         this.MAX_SPEED = 600;
         this.ACCELERATION_FORCE = 0.01;
         this.ANGULAR_VELOCITY = 0.05;
-        this.RAY_LENGTH = 150;
+        this.RAY_LENGTH = 200;
     }
 
     create() {
