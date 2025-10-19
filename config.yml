@@ -1,0 +1,16 @@
+tunnel: racing-game
+ingress:
+  # Rule 1: The Python AI server (port 8765)
+  - hostname: ai-*.trycloudflare.com
+    service: ws://localhost:8765
+
+  # Rule 2: The FastAPI Voice Server (port 8766)
+  - hostname: voice-*.trycloudflare.com
+    service: ws://localhost:8766
+
+  # Rule 3: The main web game (port 4173)
+  - hostname: "*.trycloudflare.com"
+    service: http://localhost:4173 
+
+  # Catch-all
+  - service: http_status:404

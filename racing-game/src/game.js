@@ -10,7 +10,9 @@ class AIAgent {
         this.ACCELERATION_FORCE = acceleration;
         this.ANGULAR_VELOCITY = angularVelocity;
         this.latestAction = { thrust: 0, angularVelocity: 0 };
-        this.socket = new WebSocket('ws://localhost:8765');
+        const aiHost = 'ai-' + window.location.hostname;
+        this.socket = new WebSocket('wss://' + aiHost);
+        console.log('AI Agent: Connecting to', this.socket.url);
         this.socket.onopen = () => console.log('🤖 AI Agent: Connected.');
         this.socket.onclose = () => {
             console.error('🤖 AI Agent: Disconnected.');
@@ -705,6 +707,7 @@ const config = {
     scene: GameScene,
     parent: 'game-container'
 };
+
 
 const game = new Phaser.Game(config);
 window.game = game;
