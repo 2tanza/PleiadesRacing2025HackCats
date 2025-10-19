@@ -43,6 +43,12 @@ class GameScene extends Phaser.Scene {
         this.ANGULAR_VELOCITY = 0.05;
         this.RAY_LENGTH = 200;
     }
+    preload() {
+    // Make sure to replace these paths with the correct paths to your images
+    this.load.image('playerCarSprite', 'public/f1carorange.png');
+    this.load.image('aiCarSprite', 'public/f1carblue.png');
+
+}
 
     create() {
         this.cameras.main.setBackgroundColor(0x222222);
@@ -61,9 +67,16 @@ class GameScene extends Phaser.Scene {
         });
 
         // Hard-coded spawn points (moved to top-left)
-        this.playerCar = this.add.rectangle(150, 150, 30, 20, 0xff0000);
-        
+        this.playerCar = this.add.sprite(150, 150, 'playerCarSprite');
+        this.playerCar.displayWidth = 35;
+        this.playerCar.displayHeight = 30;
+    
         this.matter.add.gameObject(this.playerCar, {
+            shape: { 
+                type: 'rectangle', 
+                width: 30, 
+                height: 20 
+            },
             mass: 10, frictionAir: 0.1, friction: 0.05,
             restitution: 0.3, label: 'playerCar'
         });
@@ -76,9 +89,16 @@ class GameScene extends Phaser.Scene {
         this.aiRayDistances = [0, 0, 0, 0, 0];
         this.aiRayGraphics = this.add.graphics();
         
-        this.aiCar = this.add.rectangle(150, 200, 30, 20, 0x0000ff);
-        
+        this.aiCar = this.add.sprite(150, 200, 'aiCarSprite');
+        this.aiCar.displayWidth = 42;
+        this.aiCar.displayHeight = 32;
+
         this.matter.add.gameObject(this.aiCar, {
+            shape: { 
+                type: 'rectangle', 
+                width: 30, 
+                height: 20 
+            },
             mass: 10, frictionAir: 0.1, friction: 0.01,
             restitution: 0.3, label: 'aiCar'
         });
@@ -335,7 +355,7 @@ const config = {
     height: 1200,
     physics: {
         default: 'matter',
-        matter: { gravity: { y: 0 }, debug: true }
+        matter: { gravity: { y: 0 }, debug: false }
     },
     input: {
         gamepad: true

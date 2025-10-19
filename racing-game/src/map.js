@@ -49,6 +49,8 @@ export class TrackEditor {
         this.wallBodies.push(body);
         const geomRect = new Phaser.Geom.Rectangle(x - w / 2, y - h / 2, w, h);
         this.geomWalls.push(geomRect);
+        this.graphics.fillStyle(0x999999); // A visible gray color
+        this.graphics.fillRect(geomRect.x, geomRect.y, geomRect.width, geomRect.height);
     }
 
     /**
