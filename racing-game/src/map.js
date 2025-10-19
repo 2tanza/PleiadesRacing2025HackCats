@@ -22,6 +22,8 @@ export class TrackEditor {
         this.PIECE_WIDTH = PIECE_WIDTH;
     }
 
+    // ... (createOvalTrack, addWall, addTrackPiece, redrawAllFromGrid, drawPiece, getGeomWalls, clearTrack methods remain unchanged) ...
+
     /**
      * Creates the default oval track.
      */
@@ -218,7 +220,7 @@ export class TrackEditor {
      */
     saveTrack() {
         localStorage.setItem('customMap', JSON.stringify(this.mapGrid));
-        alert('Track Saved!');
+        alert('Track Saved to Local Storage!');
         console.log('Track saved to localStorage.');
     }
     
@@ -246,7 +248,7 @@ export class TrackEditor {
         }
 
         // Validation check for 12x12
-        if (!loadedMapGrid || !Array.isArray(loadedMapGrid) || loadedMapGrid.length !== GRID_HEIGHT || (loadedMapGrid[0] && loadedMapGrid[0].length !== GRID_WIDTH)) {
+        if (!this._isValidMapGrid(loadedMapGrid)) {
             console.warn(`Loaded map has wrong dimensions (or is invalid). Discarding map.`);
             localStorage.removeItem('customMap'); 
             this.redrawAllFromGrid(); 
@@ -257,4 +259,101 @@ export class TrackEditor {
         this.redrawAllFromGrid();
         return true;
     }
+
+    // --- NEW METHODS ---
+
+    /**
+     * Validates if the loaded grid is a 12x12 array.
+     * @param {Array} gridData - The parsed map data.
+     */
+    _isValidMapGrid(gridData) {
+        if (!gridData || !Array.isArray(gridData) || gridData.length !== GRID_HEIGHT) {
+            return false;
+        }
+        for (let row of gridData) {
+            if (!Array.isArray(row) || row.length !== GRID_WIDTH) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Triggers a browser download for the current mapGrid.
+     */
+    exportTrackToFile() {
+        try {
+            const dataStr = JSON.stringify(this.mapGrid);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'my_track.json';
+            document.body.appendChild(a);
+            a.click();
+            
+            // Cleanup
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            console.log('Track exported successfully.');
+        } catch (e) {
+            console.error('Failed to export track:', e);
+            alert('Error exporting track. See console for details.');
+        }
+    }
+
+    /**
+     * Loads a track from a user-provided JSON file.
+     * @param {File} file - The file object from the <input type="file">
+     */
+    importTrackFromFile(file) {
+        if (!file) {
+            alert('No file selected.');
+            return;
+        }
+        
+        if (file.type !== 'application/json') {
+            alert('Invalid file type. Please select a .json file.');
+            return;
+        }
+
+        const reader = new FileReader();
+
+        reader.onload = (event) => {
+            try {
+                const fileContent = event.target.result;
+                const loadedMapGrid = JSON.parse(fileContent);
+
+                // Validate the loaded data
+                if (!this._isValidMapGrid(loadedMapGrid)) {
+                    alert('Invalid map file. The map must be a 12x12 grid.');
+                    return;
+                }
+
+                // If valid, load it
+                this.mapGrid = loadedMapGrid;
+                this.redrawAllFromGrid();
+                
+                // Also save it to local storage for convenience
+                this.saveTrack(); 
+                
+                alert('Track imported successfully!');
+                console.log('Track loaded from file and saved to local storage.');
+
+            } catch (e) {
+                console.error('Failed to read or parse imported file:', e);
+                alert('Error importing file. Is it a valid track JSON? See console for details.');
+            }
+        };
+
+        reader.onerror = (event) => {
+            console.error('File reading error:', event);
+            alert('An error occurred while reading the file.');
+        };
+
+        reader.readAsText(file);
+    }
+    // --- END NEW METHODS ---
 }

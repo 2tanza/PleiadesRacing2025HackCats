@@ -40,11 +40,17 @@ class CreatorScene extends Phaser.Scene {
         .setVisible(false)
         .setDepth(100);
 
+        // --- Event Listeners ---
         this.game.events.on('addTrackPiece', this.handleDrop, this);
         this.game.events.on('clearTrack', this.handleClear, this);
         this.game.events.on('updatePreview', this.handlePreview, this);
         this.game.events.on('hidePreview', this.handleHidePreview, this);
         this.game.events.on('saveTrack', this.handleSave, this);
+
+        // --- NEW EVENT LISTENERS ---
+        this.game.events.on('exportTrack', this.handleExport, this);
+        this.game.events.on('importTrack', this.handleImport, this);
+        // --- END NEW EVENT LISTENERS ---
     }
 
     /**
@@ -101,6 +107,28 @@ class CreatorScene extends Phaser.Scene {
     handleSave() {
         this.trackEditor.saveTrack();
     }
+
+    // --- NEW HANDLER METHODS ---
+
+    /**
+     * Handles the 'exportTrack' event from the UI.
+     */
+    handleExport() {
+        this.trackEditor.exportTrackToFile();
+    }
+
+    /**
+     * Handles the 'importTrack' event from the UI.
+     * @param {object} data - An object containing the { file }
+     */
+    handleImport(data) {
+        if (data && data.file) {
+            this.trackEditor.importTrackFromFile(data.file);
+        } else {
+            console.error('Import event received without a file.');
+        }
+    }
+    // --- END NEW HANDLER METHODS ---
 }
 
 // --- Config for the Creator Scene ---

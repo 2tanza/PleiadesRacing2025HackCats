@@ -135,7 +135,7 @@ class GameScene extends Phaser.Scene {
         this.crashCount = 0;
 
         // Raycasting for player
-        this.rayDistances = [0, 0, 0, 0, 0];
+        this.rayDistances = [0, 0, 0, 0, 0, 0, 0];
         this.rayGraphics = this.add.graphics();
         
         // Create AI car
@@ -157,7 +157,7 @@ class GameScene extends Phaser.Scene {
         });
         
         // Raycasting for AI
-        this.aiRayDistances = [0, 0, 0, 0, 0];
+        this.aiRayDistances = [0, 0, 0, 0, 0, 0, 0];
         this.aiRayGraphics = this.add.graphics();
         
         // AI waypoints (for AI agent only, not for pace notes)
@@ -226,39 +226,39 @@ class GameScene extends Phaser.Scene {
         });
         
         // Player lap info
-        this.add.text(1000, 40, 'Player:', { fontSize: '16px', fill: '#ff8800' });
-        this.playerLapText = this.add.text(1000, 60, 'Laps: 0', { 
+        this.add.text(1110, 40, 'Player:', { fontSize: '16px', fill: '#ff8800' });
+        this.playerLapText = this.add.text(1110, 60, 'Laps: 0', { 
             fontSize: '14px', 
             fill: '#fff' 
         });
-        this.playerCurrentText = this.add.text(1000, 80, 'Current: 0.00s', { 
+        this.playerCurrentText = this.add.text(1110, 80, 'Current: 0.00s', { 
             fontSize: '14px', 
             fill: '#fff' 
         });
-        this.playerLastText = this.add.text(1000, 100, 'Last: 0.00s', { 
+        this.playerLastText = this.add.text(1110, 100, 'Last: 0.00s', { 
             fontSize: '14px', 
             fill: '#fff' 
         });
-        this.playerBestText = this.add.text(1000, 120, 'Best: 0.00s', { 
+        this.playerBestText = this.add.text(1110, 120, 'Best: 0.00s', { 
             fontSize: '14px', 
             fill: '#fff' 
         });
 
         // AI lap info
-        this.add.text(1000, 160, 'AI:', { fontSize: '16px', fill: '#0000ff' });
-        this.aiLapText = this.add.text(1000, 180, 'Laps: 0', { 
+        this.add.text(1110, 160, 'AI:', { fontSize: '16px', fill: '#8686fcff' });
+        this.aiLapText = this.add.text(1110, 180, 'Laps: 0', { 
             fontSize: '14px', 
             fill: '#fff' 
         });
-        this.aiCurrentText = this.add.text(1000, 200, 'Current: 0.00s', { 
+        this.aiCurrentText = this.add.text(1110, 200, 'Current: 0.00s', { 
             fontSize: '14px', 
             fill: '#fff' 
         });
-        this.aiLastText = this.add.text(1000, 220, 'Last: 0.00s', { 
+        this.aiLastText = this.add.text(1110, 220, 'Last: 0.00s', { 
             fontSize: '14px', 
             fill: '#fff' 
         });
-        this.aiBestText = this.add.text(1000, 240, 'Best: 0.00s', { 
+        this.aiBestText = this.add.text(1110, 240, 'Best: 0.00s', { 
             fontSize: '14px', 
             fill: '#fff' 
         });
@@ -290,7 +290,9 @@ class GameScene extends Phaser.Scene {
             car.rotation - Math.PI / 4,      // [1] Front-Left
             car.rotation + Math.PI / 4,      // [2] Front-Right
             car.rotation - Math.PI / 2,      // [3] Left
-            car.rotation + Math.PI / 2       // [4] Right
+            car.rotation + Math.PI / 2,       // [4] Right
+            car.rotation - (3 * Math.PI / 4), // [5] Rear-Left
+            car.rotation + (3 * Math.PI / 4)  // [6] Rear-Right
         ];
         
         if (this.showRays) {

@@ -37,16 +37,28 @@
             padding: 10px; width: 100%; cursor: pointer;
             font-size: 1rem;
             flex-shrink: 0;
+            margin-bottom: 10px; /* Added margin for spacing */
         }
         #toolbox button:hover { background: #e00; }
-        #save-button {
-            background: #008cba;
-            margin-bottom: 10px;
-        }
+        
+        /* Save Button */
+        #save-button { background: #008cba; }
         #save-button:hover { background: #00aef5; }
+        
+        /* Export Button */
+        #export-button { background: #00695c; }
+        #export-button:hover { background: #00897b; }
+
+        /* Import Button */
+        #import-button { background: #558b2f; }
+        #import-button:hover { background: #7cb342; }
+
+        /* Clear Button */
         #clear-button {
             margin-top: auto; /* Pushes to bottom */
+            margin-bottom: 0; /* Reset margin */
         }
+
         .nav-links a {
             display: inline-block;
             padding: 15px 30px;
@@ -112,6 +124,10 @@
             </div>
             
             <button id="save-button">Save Track</button>
+
+            <button id="export-button">Export Track</button>
+            <button id="import-button">Import Track</button>
+            <input type="file" id="import-input" accept=".json,application/json" style="display: none;">
             <button id="clear-button">Clear Track</button>
         </div>
         
@@ -128,6 +144,8 @@
                     e.dataTransfer.effectAllowed = 'copy';
                 });
             });
+
+            // --- Game Canvas Event Listeners ---
             const gameCanvas = document.querySelector('canvas');
             if (gameCanvas) {
                 gameCanvas.addEventListener('dragover', (e) => {
@@ -149,14 +167,40 @@
                     if (window.game) window.game.events.emit('addTrackPiece', { pieceType, x, y });
                 });
             }
+
+            // --- Toolbox Button Event Listeners ---
             const clearButton = document.getElementById('clear-button');
             clearButton.addEventListener('click', () => {
                 if (window.game) window.game.events.emit('clearTrack');
             });
+            
             const saveButton = document.getElementById('save-button');
             saveButton.addEventListener('click', () => {
                 if (window.game) window.game.events.emit('saveTrack');
             });
+
+            // --- NEW EVENT LISTENERS ---
+            const exportButton = document.getElementById('export-button');
+            exportButton.addEventListener('click', () => {
+                if (window.game) window.game.events.emit('exportTrack');
+            });
+
+            const importButton = document.getElementById('import-button');
+            const importInput = document.getElementById('import-input');
+            
+            importButton.addEventListener('click', () => {
+                importInput.click(); // Trigger the hidden file input
+            });
+
+            importInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    if (window.game) window.game.events.emit('importTrack', { file: file });
+                }
+                // Reset the input value so 'change' fires even if the same file is selected
+                e.target.value = null; 
+            });
+            // --- END NEW EVENT LISTENERS ---
         });
     </script>
 </body>
@@ -164,6 +208,5 @@
     <div class="nav-links">
         <a href="index.html">Index</a>
     </div>
-
 
 </html>
