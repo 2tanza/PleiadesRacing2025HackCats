@@ -15,11 +15,14 @@ export class TrackEditor {
         this.geomWalls = []; // For raycasting
         this.wallBodies = []; // To hold Matter.js bodies
         this.graphics = this.scene.add.graphics();
+        this.finishLine = null; 
 
         this.mapGrid = Array(GRID_HEIGHT).fill(null).map(() => Array(GRID_WIDTH).fill(null));
         
         this.PIECE_WIDTH = PIECE_WIDTH;
     }
+
+    // ... (createOvalTrack, addWall, addTrackPiece, redrawAllFromGrid, drawPiece, getGeomWalls, clearTrack methods remain unchanged) ...
 
     /**
      * Creates the default oval track.
@@ -49,6 +52,8 @@ export class TrackEditor {
         this.wallBodies.push(body);
         const geomRect = new Phaser.Geom.Rectangle(x - w / 2, y - h / 2, w, h);
         this.geomWalls.push(geomRect);
+        this.graphics.fillStyle(0x999999); // A visible gray color
+        this.graphics.fillRect(geomRect.x, geomRect.y, geomRect.width, geomRect.height);
     }
 
     /**
@@ -79,6 +84,10 @@ export class TrackEditor {
     redrawAllFromGrid() {
         this.graphics.clear();
         this.scene.matter.world.remove(this.wallBodies);
+        if (this.finishLine) { // <-- ADD THIS BLOCK
+            this.scene.matter.world.remove(this.finishLine);
+            this.finishLine = null;
+        }
         this.wallBodies = [];
         this.geomWalls = [];
         
@@ -148,6 +157,44 @@ export class TrackEditor {
                 this.addWall(bottomWall.x, bottomWall.y, bottomWall.w, bottomWall.h);
                 this.addWall(rightWall.x, rightWall.y, rightWall.w, rightWall.h);
                 break;
+            case 'finish-line-h':
+                // Draw visual road
+                this.graphics.fillStyle(0x333333, 1);
+                this.graphics.fillRect(x - PIECE_WIDTH / 2, y - PIECE_WIDTH / 2, PIECE_WIDTH, PIECE_WIDTH);
+
+                // Draw visual finish line (a white rectangle)
+                this.graphics.fillStyle(0xffffff, 0.8);
+                this.graphics.fillRect(x - 5, y - PIECE_WIDTH / 2, 10, PIECE_WIDTH);
+
+                // Add the SENSOR body
+                this.finishLine = this.scene.matter.add.rectangle(x, y, 10, PIECE_WIDTH, {
+                    isStatic: true,
+                    isSensor: true, // <-- This makes it a sensor
+                    label: 'finishLine' // <-- We use this label in game.js
+                });
+                this.addWall(topWall.x, topWall.y, topWall.w, topWall.h);
+                this.addWall(bottomWall.x, bottomWall.y, bottomWall.w, bottomWall.h);
+                break;
+            case 'finish-line-v':
+                // Draw visual road
+                this.graphics.fillStyle(0x333333, 1);
+                this.graphics.fillRect(x - PIECE_WIDTH / 2, y - PIECE_WIDTH / 2, PIECE_WIDTH, PIECE_WIDTH);
+                
+                // Draw visual finish line (a horizontal white rectangle)
+                this.graphics.fillStyle(0xffffff, 0.8);
+                this.graphics.fillRect(x - PIECE_WIDTH / 2, y - 5, PIECE_WIDTH, 10);
+
+                // Add the SENSOR body (horizontal)
+                this.finishLine = this.scene.matter.add.rectangle(x, y, PIECE_WIDTH, 10, {
+                    isStatic: true,
+                    isSensor: true, 
+                    label: 'finishLine' // Use the *same* label
+                });
+
+                // Add the solid left and right walls
+                this.addWall(leftWall.x, leftWall.y, leftWall.w, leftWall.h);
+                this.addWall(rightWall.x, rightWall.y, rightWall.w, rightWall.h);
+                break;
         }
     }
 
@@ -173,7 +220,7 @@ export class TrackEditor {
      */
     saveTrack() {
         localStorage.setItem('customMap', JSON.stringify(this.mapGrid));
-        alert('Track Saved!');
+        alert('Track Saved to Local Storage!');
         console.log('Track saved to localStorage.');
     }
     
@@ -201,7 +248,7 @@ export class TrackEditor {
         }
 
         // Validation check for 12x12
-        if (!loadedMapGrid || !Array.isArray(loadedMapGrid) || loadedMapGrid.length !== GRID_HEIGHT || (loadedMapGrid[0] && loadedMapGrid[0].length !== GRID_WIDTH)) {
+        if (!this._isValidMapGrid(loadedMapGrid)) {
             console.warn(`Loaded map has wrong dimensions (or is invalid). Discarding map.`);
             localStorage.removeItem('customMap'); 
             this.redrawAllFromGrid(); 
@@ -212,4 +259,101 @@ export class TrackEditor {
         this.redrawAllFromGrid();
         return true;
     }
+
+    // --- NEW METHODS ---
+
+    /**
+     * Validates if the loaded grid is a 12x12 array.
+     * @param {Array} gridData - The parsed map data.
+     */
+    _isValidMapGrid(gridData) {
+        if (!gridData || !Array.isArray(gridData) || gridData.length !== GRID_HEIGHT) {
+            return false;
+        }
+        for (let row of gridData) {
+            if (!Array.isArray(row) || row.length !== GRID_WIDTH) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Triggers a browser download for the current mapGrid.
+     */
+    exportTrackToFile() {
+        try {
+            const dataStr = JSON.stringify(this.mapGrid);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'my_track.json';
+            document.body.appendChild(a);
+            a.click();
+            
+            // Cleanup
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            console.log('Track exported successfully.');
+        } catch (e) {
+            console.error('Failed to export track:', e);
+            alert('Error exporting track. See console for details.');
+        }
+    }
+
+    /**
+     * Loads a track from a user-provided JSON file.
+     * @param {File} file - The file object from the <input type="file">
+     */
+    importTrackFromFile(file) {
+        if (!file) {
+            alert('No file selected.');
+            return;
+        }
+        
+        if (file.type !== 'application/json') {
+            alert('Invalid file type. Please select a .json file.');
+            return;
+        }
+
+        const reader = new FileReader();
+
+        reader.onload = (event) => {
+            try {
+                const fileContent = event.target.result;
+                const loadedMapGrid = JSON.parse(fileContent);
+
+                // Validate the loaded data
+                if (!this._isValidMapGrid(loadedMapGrid)) {
+                    alert('Invalid map file. The map must be a 12x12 grid.');
+                    return;
+                }
+
+                // If valid, load it
+                this.mapGrid = loadedMapGrid;
+                this.redrawAllFromGrid();
+                
+                // Also save it to local storage for convenience
+                this.saveTrack(); 
+                
+                alert('Track imported successfully!');
+                console.log('Track loaded from file and saved to local storage.');
+
+            } catch (e) {
+                console.error('Failed to read or parse imported file:', e);
+                alert('Error importing file. Is it a valid track JSON? See console for details.');
+            }
+        };
+
+        reader.onerror = (event) => {
+            console.error('File reading error:', event);
+            alert('An error occurred while reading the file.');
+        };
+
+        reader.readAsText(file);
+    }
+    // --- END NEW METHODS ---
 }
