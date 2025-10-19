@@ -69,6 +69,8 @@ class GameScene extends Phaser.Scene {
         // Turn detection cooldown (frame-based)
         this.lastTurnCheckFrame = 0;
         this.TURN_CHECK_COOLDOWN = 120; // ~2 seconds at 60fps
+
+        this.showRays = true;
     }
 
     preload() {
@@ -195,7 +197,8 @@ class GameScene extends Phaser.Scene {
             right: 'RIGHT',
             space: 'SPACE', 
             e: 'E', 
-            r: 'R'
+            r: 'R',
+            h: 'H'
         });
 
         // Telemetry recording
@@ -217,7 +220,7 @@ class GameScene extends Phaser.Scene {
             fill: '#fff' 
         });
         this.instructionsText = this.add.text(10, 100, 
-            'Arrows: Drive | SPACE: Record | E: Export | R: Reset', { 
+            'Arrows: Drive | SPACE: Record | E: Export | R: Reset, H: Toggle Rays',{ 
             fontSize: '12px', 
             fill: '#aaa' 
         });
@@ -280,6 +283,8 @@ class GameScene extends Phaser.Scene {
      * Casts rays from a car to detect nearby walls and objects
      */
     castRays(car, graphics, distances, walls, otherPolygons, rayColor) {
+        graphics.clear();
+
         const rayAngles = [
             car.rotation,                    // [0] Front
             car.rotation - Math.PI / 4,      // [1] Front-Left
@@ -288,8 +293,9 @@ class GameScene extends Phaser.Scene {
             car.rotation + Math.PI / 2       // [4] Right
         ];
         
-        graphics.clear();
-        graphics.lineStyle(1, rayColor, 0.5);
+        if (this.showRays) {
+            graphics.lineStyle(1, rayColor, 0.5);
+        }
         const carX = car.x;
         const carY = car.y;
 
@@ -341,9 +347,11 @@ class GameScene extends Phaser.Scene {
             distances[index] = closestDistance / this.RAY_LENGTH;
             
             // Draw the ray
-            graphics.lineBetween(carX, carY, closestHitPoint.x, closestHitPoint.y);
-            graphics.fillStyle(0xff0000);
-            graphics.fillCircle(closestHitPoint.x, closestHitPoint.y, 3);
+            if (this.showRays){
+                graphics.lineBetween(carX, carY, closestHitPoint.x, closestHitPoint.y);
+                graphics.fillStyle(0xff0000);
+                graphics.fillCircle(closestHitPoint.x, closestHitPoint.y, 3);
+            }
         });
     }
 
@@ -599,6 +607,15 @@ class GameScene extends Phaser.Scene {
             }
         }
         
+        if (Phaser.Input.Keyboard.JustDown(this.keys.h)) {
+            this.showRays = !this.showRays;
+            // If we just hid them, clear the graphics one last time
+            if (!this.showRays) {
+                this.rayGraphics.clear();
+                this.aiRayGraphics.clear();
+            }
+        }
+
         if (this.isRecording && this.frameCount % 3 === 0) {
             this.telemetryData.push(this.createTelemetryFrame(false));
         }
