@@ -42,9 +42,24 @@ class GameScene extends Phaser.Scene {
         this.ACCELERATION_FORCE = 0.01;
         this.ANGULAR_VELOCITY = 0.05;
         this.RAY_LENGTH = 200;
-    }
+        this.lapData = {
+        player: {
+            count: -1, // Start at -1, first cross is 0
+            startTime: 0,
+            lastLap: 0,
+            bestLap: 0,
+            canTrigger: true
+        },
+        ai: {
+            count: -1,
+            startTime: 0,
+            lastLap: 0,
+            bestLap: 0,
+            canTrigger: true
+        }
+    };
+}
     preload() {
-    // Make sure to replace these paths with the correct paths to your images
     this.load.image('playerCarSprite', 'public/f1carorange.png');
     this.load.image('aiCarSprite', 'public/f1carblue.png');
 
@@ -116,6 +131,8 @@ class GameScene extends Phaser.Scene {
             if ((isPlayerA && bodyB.label === 'wall') || (isPlayerB && bodyA.label === 'wall')) {
                 this.onPlayerWallHit();
             }
+            this.checkFinishLine(bodyA, bodyB, 'player');
+            this.checkFinishLine(bodyA, bodyB, 'ai');
         });
 
         this.keys = this.input.keyboard.addKeys({
@@ -130,6 +147,19 @@ class GameScene extends Phaser.Scene {
         this.speedText = this.add.text(10, 40, 'Speed: 0', { fontSize: '14px', fill: '#fff' });
         this.crashText = this.add.text(10, 70, 'Crashes: 0', { fontSize: '14px', fill: '#fff' });
         this.instructionsText = this.add.text(10, 100, 'Arrows: Drive | SPACE: Record | E: Export | R: Reset', { fontSize: '12px', fill: '#aaa' });
+        this.playerLapText = this.add.text(1000, 60, 'Laps: 0', { fontSize: '14px', fill: '#fff' });
+        this.playerCurrentText = this.add.text(1000, 80, 'Current: 0.00s', { fontSize: '14px', fill: '#fff' });
+        this.playerLastText = this.add.text(1000, 100, 'Last: 0.00s', { fontSize: '14px', fill: '#fff' });
+        this.playerBestText = this.add.text(1000, 120, 'Best: 0.00s', { fontSize: '14px', fill: '#fff' });
+
+        this.add.text(1000, 160, 'AI:', { fontSize: '16px', fill: '#0000ff' });
+        this.aiLapText = this.add.text(1000, 180, 'Laps: 0', { fontSize: '14px', fill: '#fff' });
+        this.aiCurrentText = this.add.text(1000, 200, 'Current: 0.00s', { fontSize: '14px', fill: '#fff' });
+        this.aiLastText = this.add.text(1000, 220, 'Last: 0.00s', { fontSize: '14px', fill: '#fff' });
+        this.aiBestText = this.add.text(1000, 240, 'Best: 0.00s', { fontSize: '14px', fill: '#fff' });
+        this.lapData.player.startTime = this.time.now;
+        this.lapData.ai.startTime = this.time.now;
+        this.updateLapUI();
     }
 
     
@@ -242,6 +272,13 @@ class GameScene extends Phaser.Scene {
     
     update() {
         this.frameCount++;
+
+        const now = this.time.now;
+        const playerCurrentTime = (now - this.lapData.player.startTime) / 1000.0;
+        this.playerCurrentText.setText(`Current: ${playerCurrentTime.toFixed(2)}s`);
+        
+        const aiCurrentTime = (now - this.lapData.ai.startTime) / 1000.0;
+        this.aiCurrentText.setText(`Current: ${aiCurrentTime.toFixed(2)}s`);
        
         let thrust = 0; 
         let angularVelocity = 0;
@@ -345,6 +382,68 @@ class GameScene extends Phaser.Scene {
         URL.revokeObjectURL(url);
         console.log('Exported ' + this.telemetryData.length + ' frames');
         this.telemetryData = [];
+    }
+    /**
+     * Checks if a collision involves the finish line and a specific car.
+     */
+    checkFinishLine(bodyA, bodyB, carType) {
+        const carLabel = (carType === 'player') ? 'playerCar' : 'aiCar';
+        let carBody = null;
+        let finishBody = null;
+
+        if (bodyA.label === carLabel) carBody = bodyA;
+        else if (bodyB.label === carLabel) carBody = bodyB;
+
+        if (bodyA.label === 'finishLine') finishBody = bodyA;
+        else if (bodyB.label === 'finishLine') finishBody = bodyB;
+
+        if (carBody && finishBody) {
+            this.completeLap(carType);
+        }
+    }
+
+    /**
+     * Handles the logic for completing a lap.
+     */
+    completeLap(carType) {
+        const data = this.lapData[carType];
+        if (!data.canTrigger) return; // Debounce to prevent multiple triggers
+
+        const now = this.time.now;
+        data.canTrigger = false;
+
+        // Don't record the first pass (lap 0)
+        if (data.count >= 0) {
+            const lapTime = (now - data.startTime) / 1000.0;
+            data.lastLap = lapTime;
+            if (lapTime < data.bestLap || data.bestLap === 0) {
+                data.bestLap = lapTime;
+            }
+        }
+
+        data.count++;
+        data.startTime = now; // Start timer for the *next* lap
+        this.updateLapUI();
+
+        // Set a 5-second cooldown before the line can be triggered again
+        this.time.delayedCall(5000, () => {
+            data.canTrigger = true;
+        });
+    }
+
+    /**
+     * Updates all the lap-related UI text.
+     */
+    updateLapUI() {
+        const p = this.lapData.player;
+        this.playerLapText.setText(`Laps: ${Math.max(0, p.count)}`);
+        this.playerLastText.setText(`Last: ${p.lastLap.toFixed(2)}s`);
+        this.playerBestText.setText(`Best: ${p.bestLap.toFixed(2)}s`);
+
+        const a = this.lapData.ai;
+        this.aiLapText.setText(`Laps: ${Math.max(0, a.count)}`);
+        this.aiLastText.setText(`Last: ${a.lastLap.toFixed(2)}s`);
+        this.aiBestText.setText(`Best: ${a.bestLap.toFixed(2)}s`);
     }
 }
 

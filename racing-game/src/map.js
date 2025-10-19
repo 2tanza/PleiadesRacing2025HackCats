@@ -15,6 +15,7 @@ export class TrackEditor {
         this.geomWalls = []; // For raycasting
         this.wallBodies = []; // To hold Matter.js bodies
         this.graphics = this.scene.add.graphics();
+        this.finishLine = null; 
 
         this.mapGrid = Array(GRID_HEIGHT).fill(null).map(() => Array(GRID_WIDTH).fill(null));
         
@@ -81,6 +82,10 @@ export class TrackEditor {
     redrawAllFromGrid() {
         this.graphics.clear();
         this.scene.matter.world.remove(this.wallBodies);
+        if (this.finishLine) { // <-- ADD THIS BLOCK
+            this.scene.matter.world.remove(this.finishLine);
+            this.finishLine = null;
+        }
         this.wallBodies = [];
         this.geomWalls = [];
         
@@ -148,6 +153,44 @@ export class TrackEditor {
                 break;
             case 'turn-br': // Bottom-right
                 this.addWall(bottomWall.x, bottomWall.y, bottomWall.w, bottomWall.h);
+                this.addWall(rightWall.x, rightWall.y, rightWall.w, rightWall.h);
+                break;
+            case 'finish-line-h':
+                // Draw visual road
+                this.graphics.fillStyle(0x333333, 1);
+                this.graphics.fillRect(x - PIECE_WIDTH / 2, y - PIECE_WIDTH / 2, PIECE_WIDTH, PIECE_WIDTH);
+
+                // Draw visual finish line (a white rectangle)
+                this.graphics.fillStyle(0xffffff, 0.8);
+                this.graphics.fillRect(x - 5, y - PIECE_WIDTH / 2, 10, PIECE_WIDTH);
+
+                // Add the SENSOR body
+                this.finishLine = this.scene.matter.add.rectangle(x, y, 10, PIECE_WIDTH, {
+                    isStatic: true,
+                    isSensor: true, // <-- This makes it a sensor
+                    label: 'finishLine' // <-- We use this label in game.js
+                });
+                this.addWall(topWall.x, topWall.y, topWall.w, topWall.h);
+                this.addWall(bottomWall.x, bottomWall.y, bottomWall.w, bottomWall.h);
+                break;
+            case 'finish-line-v':
+                // Draw visual road
+                this.graphics.fillStyle(0x333333, 1);
+                this.graphics.fillRect(x - PIECE_WIDTH / 2, y - PIECE_WIDTH / 2, PIECE_WIDTH, PIECE_WIDTH);
+                
+                // Draw visual finish line (a horizontal white rectangle)
+                this.graphics.fillStyle(0xffffff, 0.8);
+                this.graphics.fillRect(x - PIECE_WIDTH / 2, y - 5, PIECE_WIDTH, 10);
+
+                // Add the SENSOR body (horizontal)
+                this.finishLine = this.scene.matter.add.rectangle(x, y, PIECE_WIDTH, 10, {
+                    isStatic: true,
+                    isSensor: true, 
+                    label: 'finishLine' // Use the *same* label
+                });
+
+                // Add the solid left and right walls
+                this.addWall(leftWall.x, leftWall.y, leftWall.w, leftWall.h);
                 this.addWall(rightWall.x, rightWall.y, rightWall.w, rightWall.h);
                 break;
         }
