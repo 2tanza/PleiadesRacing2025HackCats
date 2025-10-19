@@ -205,64 +205,25 @@ class GameScene extends Phaser.Scene {
         this.telemetryData = [];
         this.isRecording = false;
         this.frameCount = 0;
-        
-        // UI Text elements
-        this.recordingText = this.add.text(10, 10, 'Press SPACE to record', { 
-            fontSize: '14px', 
-            fill: '#fff' 
-        });
-        this.speedText = this.add.text(10, 40, 'Speed: 0', { 
-            fontSize: '14px', 
-            fill: '#fff' 
-        });
-        this.crashText = this.add.text(10, 70, 'Crashes: 0', { 
-            fontSize: '14px', 
-            fill: '#fff' 
-        });
-        this.instructionsText = this.add.text(10, 100, 
-            'Arrows: Drive | SPACE: Record | E: Export | R: Reset, H: Toggle Rays',{ 
-            fontSize: '12px', 
-            fill: '#aaa' 
-        });
+               
+        // --- Get references to HTML UI Elements ---
+        this.recordingText = document.getElementById('recording-text');
+        this.speedText = document.getElementById('speed-text');
+        this.crashText = document.getElementById('crash-text');
+        this.instructionsText = document.getElementById('instructions-text');
         
         // Player lap info
-        this.add.text(1110, 40, 'Player:', { fontSize: '16px', fill: '#ff8800' });
-        this.playerLapText = this.add.text(1110, 60, 'Laps: 0', { 
-            fontSize: '14px', 
-            fill: '#fff' 
-        });
-        this.playerCurrentText = this.add.text(1110, 80, 'Current: 0.00s', { 
-            fontSize: '14px', 
-            fill: '#fff' 
-        });
-        this.playerLastText = this.add.text(1110, 100, 'Last: 0.00s', { 
-            fontSize: '14px', 
-            fill: '#fff' 
-        });
-        this.playerBestText = this.add.text(1110, 120, 'Best: 0.00s', { 
-            fontSize: '14px', 
-            fill: '#fff' 
-        });
+        this.playerLapText = document.getElementById('player-lap-text');
+        this.playerCurrentText = document.getElementById('player-current-text');
+        this.playerLastText = document.getElementById('player-last-text');
+        this.playerBestText = document.getElementById('player-best-text');
 
         // AI lap info
-        this.add.text(1110, 160, 'AI:', { fontSize: '16px', fill: '#8686fcff' });
-        this.aiLapText = this.add.text(1110, 180, 'Laps: 0', { 
-            fontSize: '14px', 
-            fill: '#fff' 
-        });
-        this.aiCurrentText = this.add.text(1110, 200, 'Current: 0.00s', { 
-            fontSize: '14px', 
-            fill: '#fff' 
-        });
-        this.aiLastText = this.add.text(1110, 220, 'Last: 0.00s', { 
-            fontSize: '14px', 
-            fill: '#fff' 
-        });
-        this.aiBestText = this.add.text(1110, 240, 'Best: 0.00s', { 
-            fontSize: '14px', 
-            fill: '#fff' 
-        });
-        
+        this.aiLapText = document.getElementById('ai-lap-text');
+        this.aiCurrentText = document.getElementById('ai-current-text');
+        this.aiLastText = document.getElementById('ai-last-text');
+        this.aiBestText = document.getElementById('ai-best-text');
+
         // Initialize lap timers
         this.lapData.player.startTime = this.time.now;
         this.lapData.ai.startTime = this.time.now;
@@ -364,7 +325,7 @@ class GameScene extends Phaser.Scene {
         if (!this.playerCar.body) return;
         
         this.crashCount++;
-        this.crashText.setText('Crashes: ' + this.crashCount);
+        this.crashText.textContent = 'Crashes: ' + this.crashCount;
         
         // Reduce velocity on crash
         const currentVel = this.playerCar.body.velocity;
@@ -488,10 +449,10 @@ class GameScene extends Phaser.Scene {
         // Update lap timers
         const now = this.time.now;
         const playerCurrentTime = (now - this.lapData.player.startTime) / 1000.0;
-        this.playerCurrentText.setText(`Current: ${playerCurrentTime.toFixed(2)}s`);
+        this.playerCurrentText.textContent = `Current: ${playerCurrentTime.toFixed(2)}s`;
         
         const aiCurrentTime = (now - this.lapData.ai.startTime) / 1000.0;
-        this.aiCurrentText.setText(`Current: ${aiCurrentTime.toFixed(2)}s`);
+        this.aiCurrentText.textContent = `Current: ${aiCurrentTime.toFixed(2)}s`;
        
         // --- PLAYER INPUT HANDLING ---
         let thrust = 0; 
@@ -543,7 +504,7 @@ class GameScene extends Phaser.Scene {
         }
         
         this.playerSpeed = currentSpeed;
-        this.speedText.setText('Speed: ' + Math.round(currentSpeed));
+        this.speedText.textContent = 'Speed: ' + Math.round(currentSpeed);
         this.playerAngle = this.playerCar.rotation;
 
         // --- RAYCASTING ---
@@ -598,14 +559,13 @@ class GameScene extends Phaser.Scene {
         // --- TELEMETRY RECORDING ---
         if (Phaser.Input.Keyboard.JustDown(this.keys.space)) {
             this.isRecording = !this.isRecording;
-            this.recordingText.setText(
-                this.isRecording ? 'REC - Recording...' : 'Press SPACE to record'
-            );
-            this.recordingText.setColor(this.isRecording ? '#ff0000' : '#ffffff');
+            this.recordingText.textContent = 
+                this.isRecording ? 'REC - Recording...' : 'Press SPACE to record';
+            this.recordingText.style.color = this.isRecording ? '#ff0000' : '#ffffff';
             
             if (this.isRecording) {
                 this.crashCount = 0;
-                this.crashText.setText('Crashes: 0');
+                this.crashText.textContent = 'Crashes: 0';
             }
         }
         
@@ -716,14 +676,14 @@ class GameScene extends Phaser.Scene {
      */
     updateLapUI() {
         const p = this.lapData.player;
-        this.playerLapText.setText(`Laps: ${Math.max(0, p.count)}`);
-        this.playerLastText.setText(`Last: ${p.lastLap.toFixed(2)}s`);
-        this.playerBestText.setText(`Best: ${p.bestLap.toFixed(2)}s`);
+        this.playerLapText.textContent = `Laps: ${Math.max(0, p.count)}`;
+        this.playerLastText.textContent = `Last: ${p.lastLap.toFixed(2)}s`;
+        this.playerBestText.textContent = `Best: ${p.bestLap.toFixed(2)}s`;
 
         const a = this.lapData.ai;
-        this.aiLapText.setText(`Laps: ${Math.max(0, a.count)}`);
-        this.aiLastText.setText(`Last: ${a.lastLap.toFixed(2)}s`);
-        this.aiBestText.setText(`Best: ${a.bestLap.toFixed(2)}s`);
+        this.aiLapText.textContent = `Laps: ${Math.max(0, a.count)}`;
+        this.aiLastText.textContent = `Last: ${a.lastLap.toFixed(2)}s`;
+        this.aiBestText.textContent = `Best: ${a.bestLap.toFixed(2)}s`;
     }
 }
 

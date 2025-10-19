@@ -7,25 +7,70 @@
     <style>
         body {
             margin: 0;
-            padding: 0;
+            padding: 20px; /* Add some padding */
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start; /* Align to top */
             height: 100vh;
             background: #222;
             font-family: Arial, sans-serif;
+            color: #fff;
         }
+        
+        /* New wrapper to hold game and UI */
+        #app-wrapper {
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+        }
+
+        /* This container will just hold the canvas */
         #game-container {
             display: flex;
             flex-direction: row;
+            width: 1200px;
+            height: 1200px;
         }
         canvas {
             display: block;
         }
+
+        /* New UI Panel */
+        #ui-panel {
+            width: 300px;
+            height: 1200px;
+            background: #333;
+            padding: 20px;
+            box-sizing: border-box; /* Ensures padding doesn't add to width */
+            border-radius: 5px;
+            display: flex;
+            flex-direction: column;
+        }
+        #ui-panel h3 {
+            margin-top: 0;
+            border-bottom: 1px solid #555;
+            padding-bottom: 10px;
+        }
+        #ui-panel p {
+            margin: 5px 0;
+            font-size: 16px;
+        }
+        #ui-panel p#instructions-text {
+            font-size: 14px;
+            color: #aaa;
+            line-height: 1.4;
+        }
+
+        .nav-links {
+            margin-top: auto; /* Pushes to the bottom of the panel */
+        }
         .nav-links a {
             display: inline-block;
             padding: 15px 30px;
-            margin: 10px;
+            width: 100%;
+            box-sizing: border-box;
+            text-align: center;
+            margin: 10px 0 0 0;
             background: #00ffff;
             color: #222;
             text-decoration: none;
@@ -40,13 +85,40 @@
     </style>
 </head>
 <body>
-    <div id="game-container"></div>
+    
+    <div id="app-wrapper">
+
+        <div id="game-container"></div>
+
+        <div id="ui-panel">
+            <h3>Game Info</h3>
+            <p id="recording-text">Press SPACE to record</p>
+            <p id="speed-text">Speed: 0</p>
+            <p id="crash-text">Crashes: 0</p>
+            <p id="instructions-text">
+                Arrows: Drive | SPACE: Record | E: Export | R: Reset, H: Toggle Rays
+            </p>
+
+            <h3 style="margin-top: 30px;">Player Laps</h3>
+            <p id="player-lap-text" style="color: #ff8800; font-weight: bold;">Laps: 0</p>
+            <p id="player-current-text">Current: 0.00s</p>
+            <p id="player-last-text">Last: 0.00s</p>
+            <p id="player-best-text">Best: 0.00s</p>
+            
+            <h3 style="margin-top: 30px;">AI Laps</h3>
+            <p id="ai-lap-text" style="color: #0099ff; font-weight: bold;">Laps: 0</p>
+            <p id="ai-current-text">Current: 0.00s</p>
+            <p id="ai-last-text">Last: 0.00s</p>
+            <p id="ai-best-text">Best: 0.00s</p>
+
+            <div class="nav-links">
+                <a href="index.html">Index</a>
+            </div>
+        </div>
+
+    </div>
     
     <script type="module" src="src/game.js"></script>
-        <div class="nav-links">
-            <a href="index.html">Index</a>
-        </div>
+        
 </body>
-
-
 </html>
